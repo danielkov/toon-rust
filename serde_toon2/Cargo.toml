@@ -1,12 +1,20 @@
 [package]
 name = "serde_toon2"
 version = "0.1.0"
-edition = "2021"
+edition = "2024"
+authors = ["Daniel Kovacs"]
+description = "Serde-compatible serializer and deserializer for TOON (Token-Oriented Object Notation)"
+documentation = "https://docs.rs/serde_toon2"
+homepage = "https://github.com/danielkov/toon-rust"
+repository = "https://github.com/danielkov/toon-rust"
+license = "MIT"
+keywords = ["serde", "serialization", "toon", "format", "parser"]
+categories = ["encoding", "parser-implementations"]
+readme = "README.md"
 
 [dependencies]
 serde = { version = "1.0", features = ["derive"] }
 indexmap = { version = "2.0", features = ["serde"] }
-regex = "1.0"
 
 [dev-dependencies]
 serde_json = { version = "1.0", features = ["preserve_order"] }

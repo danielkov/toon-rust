@@ -2,6 +2,12 @@
 
 Serde-compatible serializer/deserializer for TOON (Token-Oriented Object Notation), a line-oriented, indentation-based format that encodes the JSON data model.
 
+## Why build another TOON parser?
+
+None of the other TOON crates (at the time of writing this) implement the [TOON spec in its entirety](https://github.com/toon-format/spec/blob/main/SPEC.md). I needed a crate that actually worked as expected, so I've built one.
+
+Fixtures in `tests/fixtures` will be kept up to date with [official tests](https://github.com/toon-format/spec/tree/main/tests/fixtures).
+
 ## Installation
 
 ```toml
@@ -27,7 +33,7 @@ Equivalent JSON:
 { "user": { "id": 123, "name": "Ada" }, "items": ["a", "b"] }
 ```
 
-Key characteristics:
+Characteristics:
 
 - **Indentation-based structure**: Objects use 2-space indentation (configurable)
 - **Minimal quoting**: Strings quoted only when ambiguous (reserved words, delimiters, special syntax)
@@ -244,7 +250,6 @@ paths[2]|: /usr/bin|/usr/local/bin
 
 - `serde` 1.0 - Serialization framework
 - `indexmap` 2.0 - Order-preserving maps
-- `regex` 1.0 - Pattern matching
 
 ## License
 

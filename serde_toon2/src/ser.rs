@@ -61,17 +61,95 @@ impl<W: Write> Serializer<W> {
             return true;
         }
 
-        let numeric_pattern = regex::Regex::new(r"^-?\d+(\.\d+)?([eE][+-]?\d+)?$").unwrap();
-        if numeric_pattern.is_match(s) {
+        if Self::looks_like_number(s) {
             return true;
         }
 
-        let leading_zero_pattern = regex::Regex::new(r"^0\d+$").unwrap();
-        if leading_zero_pattern.is_match(s) {
+        if Self::has_leading_zeros(s) {
             return true;
         }
 
         false
+    }
+
+    #[inline]
+    fn looks_like_number(s: &str) -> bool {
+        let bytes = s.as_bytes();
+        if bytes.is_empty() {
+            return false;
+        }
+
+        let mut i = 0;
+
+        // Optional leading minus
+        if bytes[i] == b'-' {
+            i += 1;
+            if i >= bytes.len() {
+                return false;
+            }
+        }
+
+        // Must have at least one digit
+        if !bytes[i].is_ascii_digit() {
+            return false;
+        }
+
+        // Integer part
+        while i < bytes.len() && bytes[i].is_ascii_digit() {
+            i += 1;
+        }
+
+        if i >= bytes.len() {
+            return true; // Just an integer
+        }
+
+        // Optional decimal part
+        if bytes[i] == b'.' {
+            i += 1;
+            if i >= bytes.len() {
+                return false; // Trailing dot
+            }
+            if !bytes[i].is_ascii_digit() {
+                return false; // No digits after dot
+            }
+            while i < bytes.len() && bytes[i].is_ascii_digit() {
+                i += 1;
+            }
+        }
+
+        if i >= bytes.len() {
+            return true; // Number with decimal
+        }
+
+        // Optional exponent
+        if bytes[i] == b'e' || bytes[i] == b'E' {
+            i += 1;
+            if i >= bytes.len() {
+                return false;
+            }
+            // Optional sign
+            if bytes[i] == b'+' || bytes[i] == b'-' {
+                i += 1;
+                if i >= bytes.len() {
+                    return false;
+                }
+            }
+            // Must have at least one digit
+            if !bytes[i].is_ascii_digit() {
+                return false;
+            }
+            while i < bytes.len() && bytes[i].is_ascii_digit() {
+                i += 1;
+            }
+        }
+
+        i == bytes.len()
+    }
+
+    #[inline]
+    fn has_leading_zeros(s: &str) -> bool {
+        let bytes = s.as_bytes();
+        bytes.len() >= 2 && bytes[0] == b'0' && bytes[1].is_ascii_digit()
     }
 
     fn escape_string(&self, s: &str) -> String {
@@ -644,8 +722,7 @@ impl<W: Write> Serializer<W> {
             return true;
         }
 
-        let valid_unquoted = regex::Regex::new(r"^[A-Za-z_][A-Za-z0-9_.]*$").unwrap();
-        if !valid_unquoted.is_match(key) {
+        if !Self::is_valid_unquoted_key(key) {
             return true;
         }
 
@@ -654,6 +731,44 @@ impl<W: Write> Serializer<W> {
         }
 
         false
+    }
+
+    #[inline]
+    fn is_valid_unquoted_key(s: &str) -> bool {
+        let bytes = s.as_bytes();
+        if bytes.is_empty() {
+            return false;
+        }
+
+        // First character must be A-Za-z_
+        let first = bytes[0];
+        if !((first >= b'A' && first <= b'Z') || (first >= b'a' && first <= b'z') || first == b'_') {
+            return false;
+        }
+
+        // Fast path for remaining characters using lookup table
+        static VALID_KEY_CHARS: [bool; 256] = {
+            let mut table = [false; 256];
+            let mut i = 0;
+            while i < 256 {
+                table[i] = (i >= b'A' as usize && i <= b'Z' as usize)
+                    || (i >= b'a' as usize && i <= b'z' as usize)
+                    || (i >= b'0' as usize && i <= b'9' as usize)
+                    || i == b'_' as usize
+                    || i == b'.' as usize;
+                i += 1;
+            }
+            table
+        };
+
+        // Check remaining bytes using lookup table
+        for &byte in &bytes[1..] {
+            if !VALID_KEY_CHARS[byte as usize] {
+                return false;
+            }
+        }
+
+        true
     }
 
     fn try_fold_object(&self, obj: &Map<String, Value>, num_segments: usize) -> Option<(String, Value)> {
@@ -762,10 +877,49 @@ impl<W: Write> Serializer<W> {
     }
 }
 
+/// Serializes a value to a TOON string using default options.
+///
+/// # Examples
+///
+/// ```
+/// use serde::Serialize;
+/// use serde_toon2::to_string;
+///
+/// #[derive(Serialize)]
+/// struct Person {
+///     name: String,
+///     age: u32,
+/// }
+///
+/// let person = Person {
+///     name: "Ada".to_string(),
+///     age: 42,
+/// };
+///
+/// let toon = to_string(&person).unwrap();
+/// assert_eq!(toon, "name: Ada\nage: 42");
+/// ```
 pub fn to_string<T: ser::Serialize>(value: &T) -> Result<String> {
     to_string_with_options(value, EncoderOptions::default())
 }
 
+/// Serializes a value to a TOON string with custom options.
+///
+/// # Examples
+///
+/// ```
+/// use serde_toon2::{to_string_with_options, EncoderOptions, Delimiter};
+///
+/// let data = vec!["a", "b", "c"];
+///
+/// let opts = EncoderOptions {
+///     delimiter: Delimiter::Pipe,
+///     ..Default::default()
+/// };
+///
+/// let toon = to_string_with_options(&data, opts).unwrap();
+/// assert!(toon.contains("|"));
+/// ```
 pub fn to_string_with_options<T: ser::Serialize>(
     value: &T,
     options: EncoderOptions,
@@ -775,10 +929,37 @@ pub fn to_string_with_options<T: ser::Serialize>(
     Ok(String::from_utf8(buf).map_err(|e| Error::custom(e.to_string()))?)
 }
 
+/// Serializes a value to a TOON byte vector using default options.
+///
+/// # Examples
+///
+/// ```
+/// use serde_toon2::to_vec;
+///
+/// let data = vec![1, 2, 3];
+/// let bytes = to_vec(&data).unwrap();
+/// let toon = String::from_utf8(bytes).unwrap();
+/// assert_eq!(toon, "[3]: 1,2,3");
+/// ```
 pub fn to_vec<T: ser::Serialize>(value: &T) -> Result<Vec<u8>> {
     to_vec_with_options(value, EncoderOptions::default())
 }
 
+/// Serializes a value to a TOON byte vector with custom options.
+///
+/// # Examples
+///
+/// ```
+/// use serde_toon2::{to_vec_with_options, EncoderOptions};
+///
+/// let data = vec![1, 2, 3];
+/// let opts = EncoderOptions {
+///     indent: 4,
+///     ..Default::default()
+/// };
+/// let bytes = to_vec_with_options(&data, opts).unwrap();
+/// assert!(!bytes.is_empty());
+/// ```
 pub fn to_vec_with_options<T: ser::Serialize>(
     value: &T,
     options: EncoderOptions,
@@ -788,10 +969,45 @@ pub fn to_vec_with_options<T: ser::Serialize>(
     Ok(buf)
 }
 
+/// Serializes a value to TOON format and writes it to the given writer using default options.
+///
+/// # Examples
+///
+/// ```
+/// use serde_toon2::to_writer;
+/// use std::io::Cursor;
+///
+/// let data = vec!["x", "y", "z"];
+/// let mut buffer = Cursor::new(Vec::new());
+/// to_writer(&mut buffer, &data).unwrap();
+///
+/// let toon = String::from_utf8(buffer.into_inner()).unwrap();
+/// assert_eq!(toon, "[3]: x,y,z");
+/// ```
 pub fn to_writer<W: Write, T: ser::Serialize>(writer: W, value: &T) -> Result<()> {
     to_writer_with_options(writer, value, EncoderOptions::default())
 }
 
+/// Serializes a value to TOON format and writes it to the given writer with custom options.
+///
+/// # Examples
+///
+/// ```
+/// use serde_toon2::{to_writer_with_options, EncoderOptions, Delimiter};
+/// use std::io::Cursor;
+///
+/// let data = vec!["x", "y", "z"];
+/// let opts = EncoderOptions {
+///     delimiter: Delimiter::Tab,
+///     ..Default::default()
+/// };
+///
+/// let mut buffer = Cursor::new(Vec::new());
+/// to_writer_with_options(&mut buffer, &data, opts).unwrap();
+///
+/// let toon = String::from_utf8(buffer.into_inner()).unwrap();
+/// assert!(toon.contains("\t"));
+/// ```
 pub fn to_writer_with_options<W: Write, T: ser::Serialize>(
     writer: W,
     value: &T,

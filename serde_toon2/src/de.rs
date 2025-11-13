@@ -40,10 +40,47 @@ impl<'de> Deserializer<'de> {
     }
 }
 
+/// Deserializes a TOON string using default options.
+///
+/// # Examples
+///
+/// ```
+/// use serde::Deserialize;
+/// use serde_toon2::from_str;
+///
+/// #[derive(Deserialize, Debug, PartialEq)]
+/// struct Person {
+///     name: String,
+///     age: u32,
+/// }
+///
+/// let toon = "name: Ada\nage: 42";
+/// let person: Person = from_str(toon).unwrap();
+///
+/// assert_eq!(person.name, "Ada");
+/// assert_eq!(person.age, 42);
+/// ```
 pub fn from_str<'a, T: de::Deserialize<'a>>(s: &'a str) -> Result<T> {
     from_str_with_options(s, DecoderOptions::default())
 }
 
+/// Deserializes a TOON string with custom options.
+///
+/// # Examples
+///
+/// ```
+/// use serde_toon2::{from_str_with_options, DecoderOptions};
+/// use serde_json::Value;
+///
+/// let toon = "name: Ada\nage: 42";
+/// let opts = DecoderOptions {
+///     strict: true,
+///     ..Default::default()
+/// };
+///
+/// let value: Value = from_str_with_options(toon, opts).unwrap();
+/// assert_eq!(value["name"], "Ada");
+/// ```
 pub fn from_str_with_options<'a, T: de::Deserialize<'a>>(
     s: &'a str,
     options: DecoderOptions,
@@ -59,10 +96,40 @@ pub fn from_str_with_options<'a, T: de::Deserialize<'a>>(
     T::deserialize(value)
 }
 
+/// Deserializes a TOON byte slice using default options.
+///
+/// # Examples
+///
+/// ```
+/// use serde_toon2::from_slice;
+/// use serde_json::Value;
+///
+/// let toon = b"name: Alice\nage: 30";
+/// let data: Value = from_slice(toon).unwrap();
+///
+/// assert_eq!(data["name"], "Alice");
+/// assert_eq!(data["age"], 30);
+/// ```
 pub fn from_slice<'a, T: de::Deserialize<'a>>(v: &'a [u8]) -> Result<T> {
     from_slice_with_options(v, DecoderOptions::default())
 }
 
+/// Deserializes a TOON byte slice with custom options.
+///
+/// # Examples
+///
+/// ```
+/// use serde_toon2::{from_slice_with_options, DecoderOptions};
+///
+/// let toon = b"name: Bob\nage: 30";
+/// let opts = DecoderOptions {
+///     indent: 2,
+///     ..Default::default()
+/// };
+///
+/// let data: serde_json::Value = from_slice_with_options(toon, opts).unwrap();
+/// assert_eq!(data["name"], "Bob");
+/// ```
 pub fn from_slice_with_options<'a, T: de::Deserialize<'a>>(
     v: &'a [u8],
     options: DecoderOptions,
@@ -71,10 +138,44 @@ pub fn from_slice_with_options<'a, T: de::Deserialize<'a>>(
     from_str_with_options(s, options)
 }
 
+/// Deserializes TOON data from a reader using default options.
+///
+/// # Examples
+///
+/// ```
+/// use serde_toon2::from_reader;
+/// use std::io::Cursor;
+///
+/// let toon = "count: 5\nactive: true";
+/// let cursor = Cursor::new(toon);
+///
+/// let data: serde_json::Value = from_reader(cursor).unwrap();
+/// assert_eq!(data["count"], 5);
+/// assert_eq!(data["active"], true);
+/// ```
 pub fn from_reader<R: Read, T: de::DeserializeOwned>(rdr: R) -> Result<T> {
     from_reader_with_options(rdr, DecoderOptions::default())
 }
 
+/// Deserializes TOON data from a reader with custom options.
+///
+/// # Examples
+///
+/// ```
+/// use serde_toon2::{from_reader_with_options, DecoderOptions};
+/// use std::io::Cursor;
+///
+/// let toon = "score: 95\npassed: true";
+/// let cursor = Cursor::new(toon);
+///
+/// let opts = DecoderOptions {
+///     strict: false,
+///     ..Default::default()
+/// };
+///
+/// let data: serde_json::Value = from_reader_with_options(cursor, opts).unwrap();
+/// assert_eq!(data["score"], 95);
+/// ```
 pub fn from_reader_with_options<R: Read, T: de::DeserializeOwned>(
     mut rdr: R,
     options: DecoderOptions,
