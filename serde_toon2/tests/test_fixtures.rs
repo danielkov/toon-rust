@@ -132,10 +132,12 @@ fn test_encode_fixture(path: &Path) -> Result<()> {
                 test.spec_section
             );
         } else {
-            let output = result.expect(&format!(
-                "encode failed: fixture: {}, spec: {}",
-                test.name, test.spec_section
-            ));
+            let output = result.unwrap_or_else(|_| {
+                panic!(
+                    "encode failed: fixture: {}, spec: {}",
+                    test.name, test.spec_section
+                )
+            });
             assert_eq!(
                 output, test.expected,
                 "result does not match expected: {}, spec: {}",
@@ -170,10 +172,12 @@ fn test_decode_fixture(path: &Path) -> Result<()> {
                 test.spec_section
             );
         } else {
-            let output: serde_json::Value = result.expect(&format!(
-                "decode failed: fixture {}, spec: {}",
-                test.name, test.spec_section
-            ));
+            let output: serde_json::Value = result.unwrap_or_else(|_| {
+                panic!(
+                    "decode failed: fixture {}, spec: {}",
+                    test.name, test.spec_section
+                )
+            });
             assert_eq!(
                 output, test.expected,
                 "result does not match expected: {}, spec: {}",

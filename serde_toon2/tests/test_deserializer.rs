@@ -1,5 +1,5 @@
 use serde::Deserialize;
-use serde_toon2::{from_str, Value};
+use serde_toon2::{Value, from_str};
 
 #[test]
 fn test_primitive_string() {
@@ -16,7 +16,7 @@ fn test_primitive_number() {
 #[test]
 fn test_primitive_bool() {
     let result: Value = from_str("true").unwrap();
-    assert_eq!(result.as_bool().unwrap(), true);
+    assert!(result.as_bool().unwrap());
 }
 
 #[test]
@@ -45,7 +45,7 @@ fn test_simple_object() {
     let obj = result.as_object().unwrap();
     assert_eq!(obj.get("id").unwrap().as_i64().unwrap(), 123);
     assert_eq!(obj.get("name").unwrap().as_str().unwrap(), "Ada");
-    assert_eq!(obj.get("active").unwrap().as_bool().unwrap(), true);
+    assert!(obj.get("active").unwrap().as_bool().unwrap());
 }
 
 #[test]
@@ -120,7 +120,7 @@ fn test_deserialize_to_struct() {
 
     assert_eq!(result.id, 123);
     assert_eq!(result.name, "Ada");
-    assert_eq!(result.active, true);
+    assert!(result.active);
 }
 
 #[test]

@@ -33,8 +33,7 @@ impl<W: Write> Serializer<W> {
             return true;
         }
 
-        if s.starts_with(|c: char| c.is_whitespace()) || s.ends_with(|c: char| c.is_whitespace())
-        {
+        if s.starts_with(|c: char| c.is_whitespace()) || s.ends_with(|c: char| c.is_whitespace()) {
             return true;
         }
 
@@ -245,7 +244,13 @@ impl<W: Write> Serializer<W> {
                     } else {
                         k.to_string()
                     };
-                    write!(self.writer, "{}{}: {}", self.indent(), quoted_key, formatted)?;
+                    write!(
+                        self.writer,
+                        "{}{}: {}",
+                        self.indent(),
+                        quoted_key,
+                        formatted
+                    )?;
                 } else {
                     write!(self.writer, "{}", formatted)?;
                 }
@@ -285,7 +290,14 @@ impl<W: Write> Serializer<W> {
         if arr.is_empty() {
             let header_delim = active_delimiter.header_marker();
             if let Some(k) = key {
-                write!(self.writer, "{}{}[{}{}]:", self.indent(), k, len, header_delim)?;
+                write!(
+                    self.writer,
+                    "{}{}[{}{}]:",
+                    self.indent(),
+                    k,
+                    len,
+                    header_delim
+                )?;
             } else {
                 write!(self.writer, "[{}{}]:", len, header_delim)?;
             }
@@ -310,14 +322,20 @@ impl<W: Write> Serializer<W> {
     }
 
     fn is_primitive_array(&self, arr: &[Value]) -> bool {
-        arr.iter().all(|v| matches!(v, Value::Null | Value::Bool(_) | Value::Number(_) | Value::String(_)))
+        arr.iter().all(|v| {
+            matches!(
+                v,
+                Value::Null | Value::Bool(_) | Value::Number(_) | Value::String(_)
+            )
+        })
     }
 
     fn is_array_of_arrays(&self, arr: &[Value]) -> bool {
         if arr.is_empty() {
             return false;
         }
-        arr.iter().all(|v| matches!(v, Value::Array(inner) if self.is_primitive_array(inner)))
+        arr.iter()
+            .all(|v| matches!(v, Value::Array(inner) if self.is_primitive_array(inner)))
     }
 
     fn detect_tabular(&self, arr: &[Value]) -> Option<(bool, Vec<String>)> {
@@ -334,14 +352,18 @@ impl<W: Write> Serializer<W> {
                     let item_keys: Vec<String> = obj.keys().cloned().collect();
 
                     for val in obj.values() {
-                        if !matches!(val, Value::Null | Value::Bool(_) | Value::Number(_) | Value::String(_)) {
+                        if !matches!(
+                            val,
+                            Value::Null | Value::Bool(_) | Value::Number(_) | Value::String(_)
+                        ) {
                             return Some((false, vec![]));
                         }
                     }
 
                     if let Some(ref expected_fields) = fields {
                         let keys_set: std::collections::HashSet<_> = item_keys.iter().collect();
-                        let expected_set: std::collections::HashSet<_> = expected_fields.iter().collect();
+                        let expected_set: std::collections::HashSet<_> =
+                            expected_fields.iter().collect();
                         if keys_set != expected_set {
                             return Some((false, vec![]));
                         }
@@ -356,8 +378,8 @@ impl<W: Write> Serializer<W> {
             }
         }
 
-        if all_objects && fields.is_some() {
-            Some((true, fields.unwrap()))
+        if all_objects && let Some(fields_value) = fields {
+            Some((true, fields_value))
         } else {
             Some((false, vec![]))
         }
@@ -374,7 +396,14 @@ impl<W: Write> Serializer<W> {
 
         if arr.is_empty() {
             if let Some(k) = key {
-                write!(self.writer, "{}{}[{}{}]:", self.indent(), k, len, header_delim)?;
+                write!(
+                    self.writer,
+                    "{}{}[{}{}]:",
+                    self.indent(),
+                    k,
+                    len,
+                    header_delim
+                )?;
             } else {
                 write!(self.writer, "[{}{}]:", len, header_delim)?;
             }
@@ -382,7 +411,14 @@ impl<W: Write> Serializer<W> {
         }
 
         if let Some(k) = key {
-            write!(self.writer, "{}{}[{}{}]: ", self.indent(), k, len, header_delim)?;
+            write!(
+                self.writer,
+                "{}{}[{}{}]: ",
+                self.indent(),
+                k,
+                len,
+                header_delim
+            )?;
         } else {
             write!(self.writer, "[{}{}]: ", len, header_delim)?;
         }
@@ -413,7 +449,14 @@ impl<W: Write> Serializer<W> {
         let header_delim = active_delimiter.header_marker();
 
         if let Some(k) = key {
-            write!(self.writer, "{}{}[{}{}]:", self.indent(), k, len, header_delim)?;
+            write!(
+                self.writer,
+                "{}{}[{}{}]:",
+                self.indent(),
+                k,
+                len,
+                header_delim
+            )?;
         } else {
             write!(self.writer, "[{}{}]:", len, header_delim)?;
         }
@@ -441,7 +484,14 @@ impl<W: Write> Serializer<W> {
         let header_delim = active_delimiter.header_marker();
 
         if let Some(k) = key {
-            write!(self.writer, "{}{}[{}{}]{{", self.indent(), k, len, header_delim)?;
+            write!(
+                self.writer,
+                "{}{}[{}{}]{{",
+                self.indent(),
+                k,
+                len,
+                header_delim
+            )?;
         } else {
             write!(self.writer, "[{}{}]{{", len, header_delim)?;
         }
@@ -493,7 +543,14 @@ impl<W: Write> Serializer<W> {
         let header_delim = active_delimiter.header_marker();
 
         if let Some(k) = key {
-            write!(self.writer, "{}{}[{}{}]:", self.indent(), k, len, header_delim)?;
+            write!(
+                self.writer,
+                "{}{}[{}{}]:",
+                self.indent(),
+                k,
+                len,
+                header_delim
+            )?;
         } else {
             write!(self.writer, "[{}{}]:", len, header_delim)?;
         }
@@ -542,7 +599,9 @@ impl<W: Write> Serializer<W> {
                 match value {
                     Value::Null => write!(self.writer, "{}: null", quoted_key)?,
                     Value::Bool(b) => write!(self.writer, "{}: {}", quoted_key, b)?,
-                    Value::Number(n) => write!(self.writer, "{}: {}", quoted_key, self.format_number(n))?,
+                    Value::Number(n) => {
+                        write!(self.writer, "{}: {}", quoted_key, self.format_number(n))?
+                    }
                     Value::String(s) => {
                         write!(self.writer, "{}: ", quoted_key)?;
                         self.write_string(s, self.document_delimiter)?;
@@ -562,8 +621,12 @@ impl<W: Write> Serializer<W> {
                                     match val {
                                         Value::Null => write!(self.writer, "null")?,
                                         Value::Bool(b) => write!(self.writer, "{}", b)?,
-                                        Value::Number(n) => write!(self.writer, "{}", self.format_number(n))?,
-                                        Value::String(s) => self.write_string(s, active_delimiter)?,
+                                        Value::Number(n) => {
+                                            write!(self.writer, "{}", self.format_number(n))?
+                                        }
+                                        Value::String(s) => {
+                                            self.write_string(s, active_delimiter)?
+                                        }
                                         _ => unreachable!(),
                                     }
                                 }
@@ -602,14 +665,24 @@ impl<W: Write> Serializer<W> {
                                         write!(self.writer, "\n{}", self.indent())?;
                                         for (i, field_name) in fields.iter().enumerate() {
                                             if i > 0 {
-                                                write!(self.writer, "{}", active_delimiter.as_str())?;
+                                                write!(
+                                                    self.writer,
+                                                    "{}",
+                                                    active_delimiter.as_str()
+                                                )?;
                                             }
                                             if let Some(val) = map.get(field_name) {
                                                 match val {
                                                     Value::Null => write!(self.writer, "null")?,
                                                     Value::Bool(b) => write!(self.writer, "{}", b)?,
-                                                    Value::Number(n) => write!(self.writer, "{}", self.format_number(n))?,
-                                                    Value::String(s) => self.write_string(s, active_delimiter)?,
+                                                    Value::Number(n) => write!(
+                                                        self.writer,
+                                                        "{}",
+                                                        self.format_number(n)
+                                                    )?,
+                                                    Value::String(s) => {
+                                                        self.write_string(s, active_delimiter)?
+                                                    }
                                                     _ => unreachable!(),
                                                 }
                                             }
@@ -627,15 +700,24 @@ impl<W: Write> Serializer<W> {
                                     match item {
                                         Value::Null => write!(self.writer, "null")?,
                                         Value::Bool(b) => write!(self.writer, "{}", b)?,
-                                        Value::Number(n) => write!(self.writer, "{}", self.format_number(n))?,
+                                        Value::Number(n) => {
+                                            write!(self.writer, "{}", self.format_number(n))?
+                                        }
                                         Value::String(s) => {
                                             self.write_string(s, active_delimiter)?;
                                         }
                                         Value::Array(inner) => {
-                                            self.serialize_primitive_array(inner, None, active_delimiter)?;
+                                            self.serialize_primitive_array(
+                                                inner,
+                                                None,
+                                                active_delimiter,
+                                            )?;
                                         }
                                         Value::Object(obj) => {
-                                            self.serialize_object_as_list_item(obj, active_delimiter)?;
+                                            self.serialize_object_as_list_item(
+                                                obj,
+                                                active_delimiter,
+                                            )?;
                                         }
                                     }
                                 }
@@ -651,12 +733,18 @@ impl<W: Write> Serializer<W> {
                                 match item {
                                     Value::Null => write!(self.writer, "null")?,
                                     Value::Bool(b) => write!(self.writer, "{}", b)?,
-                                    Value::Number(n) => write!(self.writer, "{}", self.format_number(n))?,
+                                    Value::Number(n) => {
+                                        write!(self.writer, "{}", self.format_number(n))?
+                                    }
                                     Value::String(s) => {
                                         self.write_string(s, active_delimiter)?;
                                     }
                                     Value::Array(inner) => {
-                                        self.serialize_primitive_array(inner, None, active_delimiter)?;
+                                        self.serialize_primitive_array(
+                                            inner,
+                                            None,
+                                            active_delimiter,
+                                        )?;
                                     }
                                     Value::Object(obj) => {
                                         self.serialize_object_as_list_item(obj, active_delimiter)?;
@@ -670,8 +758,12 @@ impl<W: Write> Serializer<W> {
                         write!(self.writer, "{}:", quoted_key)?;
                         self.depth += 1;
                         for (nested_key, nested_val) in nested {
-                            write!(self.writer, "\n")?;
-                            self.serialize_value_with_key(nested_val, Some(nested_key), self.document_delimiter)?;
+                            writeln!(self.writer)?;
+                            self.serialize_value_with_key(
+                                nested_val,
+                                Some(nested_key),
+                                self.document_delimiter,
+                            )?;
                         }
                         self.depth -= 1;
                     }
@@ -689,14 +781,22 @@ impl<W: Write> Serializer<W> {
 
                 match value {
                     Value::Null => write!(self.writer, "\n{}{}: null", field_indent, quoted_key)?,
-                    Value::Bool(b) => write!(self.writer, "\n{}{}: {}", field_indent, quoted_key, b)?,
-                    Value::Number(n) => write!(self.writer, "\n{}{}: {}", field_indent, quoted_key, self.format_number(n))?,
+                    Value::Bool(b) => {
+                        write!(self.writer, "\n{}{}: {}", field_indent, quoted_key, b)?
+                    }
+                    Value::Number(n) => write!(
+                        self.writer,
+                        "\n{}{}: {}",
+                        field_indent,
+                        quoted_key,
+                        self.format_number(n)
+                    )?,
                     Value::String(s) => {
                         write!(self.writer, "\n{}{}: ", field_indent, quoted_key)?;
                         self.write_string(s, self.document_delimiter)?;
                     }
                     Value::Array(arr) => {
-                        write!(self.writer, "\n")?;
+                        writeln!(self.writer)?;
                         self.depth += 1;
                         self.serialize_array(arr, Some(key), active_delimiter)?;
                         self.depth -= 1;
@@ -705,8 +805,12 @@ impl<W: Write> Serializer<W> {
                         write!(self.writer, "\n{}{}:", field_indent, quoted_key)?;
                         self.depth += 2;
                         for (nested_key, nested_val) in nested {
-                            write!(self.writer, "\n")?;
-                            self.serialize_value_with_key(nested_val, Some(nested_key), self.document_delimiter)?;
+                            writeln!(self.writer)?;
+                            self.serialize_value_with_key(
+                                nested_val,
+                                Some(nested_key),
+                                self.document_delimiter,
+                            )?;
                         }
                         self.depth -= 2;
                     }
@@ -726,7 +830,12 @@ impl<W: Write> Serializer<W> {
             return true;
         }
 
-        if key.contains('\n') || key.contains('\r') || key.contains('\t') || key.contains('\\') || key.contains('"') {
+        if key.contains('\n')
+            || key.contains('\r')
+            || key.contains('\t')
+            || key.contains('\\')
+            || key.contains('"')
+        {
             return true;
         }
 
@@ -742,7 +851,7 @@ impl<W: Write> Serializer<W> {
 
         // First character must be A-Za-z_
         let first = bytes[0];
-        if !((first >= b'A' && first <= b'Z') || (first >= b'a' && first <= b'z') || first == b'_') {
+        if !(first.is_ascii_alphabetic() || first == b'_') {
             return false;
         }
 
@@ -771,7 +880,11 @@ impl<W: Write> Serializer<W> {
         true
     }
 
-    fn try_fold_object(&self, obj: &Map<String, Value>, num_segments: usize) -> Option<(String, Value)> {
+    fn try_fold_object(
+        &self,
+        obj: &Map<String, Value>,
+        num_segments: usize,
+    ) -> Option<(String, Value)> {
         use crate::options::KeyFolding;
 
         // Key folding must be enabled
@@ -803,11 +916,12 @@ impl<W: Write> Serializer<W> {
         // Try to continue folding if the value is a single-key object
         if let Value::Object(nested_obj) = value {
             // Only recurse if we haven't reached the limit yet
-            if new_num_segments < self.options.flatten_depth {
-                if let Some((nested_path, final_value)) = self.try_fold_object(nested_obj, new_num_segments) {
-                    let full_path = format!("{}.{}", key, nested_path);
-                    return Some((full_path, final_value));
-                }
+            if new_num_segments < self.options.flatten_depth
+                && let Some((nested_path, final_value)) =
+                    self.try_fold_object(nested_obj, new_num_segments)
+            {
+                let full_path = format!("{}.{}", key, nested_path);
+                return Some((full_path, final_value));
             }
             // If we've reached the limit exactly, return just this key
             // without trying to fold further
@@ -840,7 +954,7 @@ impl<W: Write> Serializer<W> {
             self.depth += 1;
 
             for (obj_key, obj_val) in obj {
-                write!(self.writer, "\n")?;
+                writeln!(self.writer)?;
                 self.serialize_value_with_key(obj_val, Some(obj_key), self.document_delimiter)?;
             }
             self.depth -= 1;
@@ -850,7 +964,7 @@ impl<W: Write> Serializer<W> {
 
             for (i, (obj_key, obj_val)) in obj.iter().enumerate() {
                 if i > 0 {
-                    write!(self.writer, "\n")?;
+                    writeln!(self.writer)?;
                 }
 
                 // Try to fold if it's an object
@@ -858,11 +972,17 @@ impl<W: Write> Serializer<W> {
                     // In safe mode, don't fold if the parent key needs quoting
                     if !self.key_needs_quoting(obj_key) {
                         // Start with 1 to account for the current key (obj_key)
-                        if let Some((folded_path, final_value)) = self.try_fold_object(nested_obj, 1) {
+                        if let Some((folded_path, final_value)) =
+                            self.try_fold_object(nested_obj, 1)
+                        {
                             let full_key = format!("{}.{}", obj_key, folded_path);
                             // Check for collision with sibling keys at this (top) level
                             if !self.top_level_keys.contains(&full_key) {
-                                self.serialize_value_with_key(&final_value, Some(&full_key), self.document_delimiter)?;
+                                self.serialize_value_with_key(
+                                    &final_value,
+                                    Some(&full_key),
+                                    self.document_delimiter,
+                                )?;
                                 continue;
                             }
                         }
@@ -926,7 +1046,7 @@ pub fn to_string_with_options<T: ser::Serialize>(
 ) -> Result<String> {
     let mut buf = Vec::new();
     to_writer_with_options(&mut buf, value, options)?;
-    Ok(String::from_utf8(buf).map_err(|e| Error::custom(e.to_string()))?)
+    String::from_utf8(buf).map_err(|e| Error::custom(e.to_string()))
 }
 
 /// Serializes a value to a TOON byte vector using default options.
@@ -1212,7 +1332,8 @@ impl<'a, W: Write> ser::SerializeSeq for SeqSerializer<'a, W> {
     }
 
     fn end(self) -> Result<()> {
-        self.serializer.serialize_value(&Value::Array(self.elements))
+        self.serializer
+            .serialize_value(&Value::Array(self.elements))
     }
 }
 
@@ -1281,7 +1402,10 @@ impl<'a, W: Write> ser::SerializeMap for MapSerializer<'a, W> {
     }
 
     fn serialize_value<T: ?Sized + ser::Serialize>(&mut self, value: &T) -> Result<()> {
-        let key = self.current_key.take().ok_or_else(|| Error::custom("serialize_value called without key"))?;
+        let key = self
+            .current_key
+            .take()
+            .ok_or_else(|| Error::custom("serialize_value called without key"))?;
         let val = to_value(value)?;
         self.entries.insert(key, val);
         Ok(())
@@ -1293,7 +1417,8 @@ impl<'a, W: Write> ser::SerializeMap for MapSerializer<'a, W> {
             outer_map.insert(variant_key, Value::Object(self.entries));
             self.serializer.serialize_value(&Value::Object(outer_map))
         } else {
-            self.serializer.serialize_value(&Value::Object(self.entries))
+            self.serializer
+                .serialize_value(&Value::Object(self.entries))
         }
     }
 }
@@ -1402,7 +1527,11 @@ fn to_value<T: ser::Serialize + ?Sized>(value: &T) -> Result<Value> {
         }
 
         fn serialize_bytes(self, v: &[u8]) -> Result<Value> {
-            Ok(Value::Array(v.iter().map(|&b| Value::Number(Number::U64(b as u64))).collect()))
+            Ok(Value::Array(
+                v.iter()
+                    .map(|&b| Value::Number(Number::U64(b as u64)))
+                    .collect(),
+            ))
         }
 
         fn serialize_none(self) -> Result<Value> {
@@ -1451,7 +1580,9 @@ fn to_value<T: ser::Serialize + ?Sized>(value: &T) -> Result<Value> {
         }
 
         fn serialize_seq(self, _len: Option<usize>) -> Result<Self::SerializeSeq> {
-            Ok(ValueSeqSerializer { elements: Vec::new() })
+            Ok(ValueSeqSerializer {
+                elements: Vec::new(),
+            })
         }
 
         fn serialize_tuple(self, len: usize) -> Result<Self::SerializeTuple> {
@@ -1486,7 +1617,11 @@ fn to_value<T: ser::Serialize + ?Sized>(value: &T) -> Result<Value> {
             })
         }
 
-        fn serialize_struct(self, _name: &'static str, len: usize) -> Result<Self::SerializeStruct> {
+        fn serialize_struct(
+            self,
+            _name: &'static str,
+            len: usize,
+        ) -> Result<Self::SerializeStruct> {
             self.serialize_map(Some(len))
         }
 
@@ -1588,7 +1723,10 @@ fn to_value<T: ser::Serialize + ?Sized>(value: &T) -> Result<Value> {
         }
 
         fn serialize_value<T: ?Sized + ser::Serialize>(&mut self, value: &T) -> Result<()> {
-            let key = self.current_key.take().ok_or_else(|| Error::custom("serialize_value called without key"))?;
+            let key = self
+                .current_key
+                .take()
+                .ok_or_else(|| Error::custom("serialize_value called without key"))?;
             self.entries.insert(key, to_value(value)?);
             Ok(())
         }

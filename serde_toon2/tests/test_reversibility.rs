@@ -1,5 +1,4 @@
-use serde_toon2::{from_str, to_string, Value};
-use serde_json;
+use serde_toon2::{Value, from_str, to_string};
 
 #[test]
 fn test_json_to_toon_to_json() {
@@ -128,7 +127,11 @@ fn test_empty_structures_reversibility() {
         let parsed_toon: Value = from_str(&toon_str).unwrap();
         let json_output = serde_json::to_value(&parsed_toon).unwrap();
 
-        assert_eq!(value, json_output, "Reversibility failed for: {}", json_input);
+        assert_eq!(
+            value, json_output,
+            "Reversibility failed for: {}",
+            json_input
+        );
     }
 }
 
@@ -157,7 +160,7 @@ fn test_numbers_canonical_format() {
         (1.5, "1.5"),
         (-0.0, "0"),
         (42.0, "42"),
-        (3.14159, "3.14159"),
+        (4.14159, "4.14159"),
     ];
 
     for (num, expected) in test_cases {
@@ -173,7 +176,12 @@ fn test_numbers_canonical_format() {
         // Compare as floats for numeric equality
         match (json_input.as_f64(), json_output.as_f64()) {
             (Some(a), Some(b)) => {
-                assert!((a - b).abs() < f64::EPSILON, "Numbers not equal: {} vs {}", a, b);
+                assert!(
+                    (a - b).abs() < f64::EPSILON,
+                    "Numbers not equal: {} vs {}",
+                    a,
+                    b
+                );
             }
             _ => panic!("Expected numbers"),
         }

@@ -1,5 +1,5 @@
 use crate::error::{Error, ErrorKind, Result};
-use crate::options::{Delimiter, DecoderOptions, PathExpansion};
+use crate::options::{DecoderOptions, Delimiter, PathExpansion};
 use crate::value::{Map, Number, Value};
 use serde::de;
 use serde::forward_to_deserialize_any;
@@ -196,14 +196,16 @@ fn tokenize_lines(input: &str, options: &DecoderOptions) -> Result<Vec<Line>> {
 
         if options.strict {
             // Check for tabs in the leading whitespace (before any non-whitespace)
-            let leading_whitespace: String = line_str.chars()
+            let leading_whitespace: String = line_str
+                .chars()
                 .take_while(|&c| c.is_whitespace())
                 .collect();
             if leading_whitespace.contains('\t') {
                 return Err(Error::new(
                     ErrorKind::IndentationError,
                     "Tabs are not allowed in indentation",
-                ).with_location(line_number, 1));
+                )
+                .with_location(line_number, 1));
             }
 
             // Only check non-empty lines for indentation multiples
@@ -211,13 +213,15 @@ fn tokenize_lines(input: &str, options: &DecoderOptions) -> Result<Vec<Line>> {
                 return Err(Error::new(
                     ErrorKind::IndentationError,
                     format!("Indentation must be a multiple of {}", indent_size),
-                ).with_location(line_number, 1));
+                )
+                .with_location(line_number, 1));
             }
         }
 
         let depth = leading_spaces / indent_size;
         // Convert character count to byte position for slicing
-        let byte_pos = line_str.char_indices()
+        let byte_pos = line_str
+            .char_indices()
             .nth(leading_spaces)
             .map(|(pos, _)| pos)
             .unwrap_or(line_str.len());
@@ -243,19 +247,18 @@ fn parse_root(lines: &[Line], options: &DecoderOptions) -> Result<Value> {
 
     let first = &lines[0];
     if first.depth != 0 {
-        return Err(Error::new(
-            ErrorKind::InvalidSyntax,
-            "First line must be at depth 0",
-        ).with_location(first.line_number, 1));
+        return Err(
+            Error::new(ErrorKind::InvalidSyntax, "First line must be at depth 0")
+                .with_location(first.line_number, 1),
+        );
     }
 
-    if is_array_header(&first.content) {
-        if let Some(header) = try_parse_array_header(&first.content)? {
-            if header.key.is_none() {
-                let mut cursor = 0;
-                return parse_value(lines, &mut cursor, 0, Delimiter::Comma, options);
-            }
-        }
+    if is_array_header(&first.content)
+        && let Some(header) = try_parse_array_header(&first.content)?
+        && header.key.is_none()
+    {
+        let mut cursor = 0;
+        return parse_value(lines, &mut cursor, 0, Delimiter::Comma, options);
     }
 
     // Check if it's a single primitive value (no colon outside quotes)
@@ -342,7 +345,12 @@ fn parse_object(lines: &[Line], start_idx: usize, options: &DecoderOptions) -> R
             let value_part = line.content[colon_pos + 1..].trim_start();
 
             if !value_part.is_empty() {
-                let values = parse_inline_array(value_part, header.delimiter, header.length, line.line_number)?;
+                let values = parse_inline_array(
+                    value_part,
+                    header.delimiter,
+                    header.length,
+                    line.line_number,
+                )?;
                 obj.insert(key, Value::Array(values));
             } else {
                 i += 1;
@@ -400,7 +408,10 @@ fn parse_value(
     options: &DecoderOptions,
 ) -> Result<Value> {
     if *cursor >= lines.len() {
-        return Err(Error::new(ErrorKind::InvalidSyntax, "Unexpected end of input"));
+        return Err(Error::new(
+            ErrorKind::InvalidSyntax,
+            "Unexpected end of input",
+        ));
     }
 
     let line = &lines[*cursor];
@@ -410,7 +421,12 @@ fn parse_value(
         let value_part = line.content[value_start..].trim_start();
 
         if !value_part.is_empty() {
-            let values = parse_inline_array(value_part, header.delimiter, header.length, line.line_number)?;
+            let values = parse_inline_array(
+                value_part,
+                header.delimiter,
+                header.length,
+                line.line_number,
+            )?;
             *cursor += 1;
             Ok(Value::Array(values))
         } else {
@@ -444,7 +460,12 @@ fn parse_object_at_depth(
             let value_part = line.content[colon_pos + 1..].trim_start();
 
             if !value_part.is_empty() {
-                let values = parse_inline_array(value_part, header.delimiter, header.length, line.line_number)?;
+                let values = parse_inline_array(
+                    value_part,
+                    header.delimiter,
+                    header.length,
+                    line.line_number,
+                )?;
                 obj.insert(key, Value::Array(values));
                 *cursor += 1;
             } else {
@@ -507,15 +528,15 @@ fn parse_tabular_array(
         let line = &lines[*cursor];
 
         if is_tabular_row(&line.content, header.delimiter) {
-            if options.strict {
-                if let Some(prev) = prev_line_number {
-                    if line.line_number > prev + 1 {
-                        return Err(Error::new(
-                            ErrorKind::InvalidSyntax,
-                            "Blank lines are not allowed inside arrays",
-                        ).with_location(line.line_number, 1));
-                    }
-                }
+            if options.strict
+                && let Some(prev) = prev_line_number
+                && line.line_number > prev + 1
+            {
+                return Err(Error::new(
+                    ErrorKind::InvalidSyntax,
+                    "Blank lines are not allowed inside arrays",
+                )
+                .with_location(line.line_number, 1));
             }
             prev_line_number = Some(line.line_number);
             let values = parse_delimited_values(&line.content, header.delimiter, line.line_number)?;
@@ -524,7 +545,8 @@ fn parse_tabular_array(
                 return Err(Error::new(
                     ErrorKind::WidthMismatch,
                     format!("Expected {} values, got {}", fields.len(), values.len()),
-                ).with_location(line.line_number, 1));
+                )
+                .with_location(line.line_number, 1));
             }
 
             let mut obj = Map::new();
@@ -570,15 +592,15 @@ fn parse_list_array(
             break;
         }
 
-        if options.strict {
-            if let Some(prev) = prev_line_number {
-                if line.line_number > prev + 1 {
-                    return Err(Error::new(
-                        ErrorKind::InvalidSyntax,
-                        "Blank lines are not allowed inside arrays",
-                    ).with_location(line.line_number, 1));
-                }
-            }
+        if options.strict
+            && let Some(prev) = prev_line_number
+            && line.line_number > prev + 1
+        {
+            return Err(Error::new(
+                ErrorKind::InvalidSyntax,
+                "Blank lines are not allowed inside arrays",
+            )
+            .with_location(line.line_number, 1));
         }
         prev_line_number = Some(line.line_number);
 
@@ -606,7 +628,12 @@ fn parse_list_array(
                 let value_part = item_content[value_start..].trim_start();
 
                 if !value_part.is_empty() {
-                    let values = parse_inline_array(value_part, inner_header.delimiter, inner_header.length, line.line_number)?;
+                    let values = parse_inline_array(
+                        value_part,
+                        inner_header.delimiter,
+                        inner_header.length,
+                        line.line_number,
+                    )?;
                     items.push(Value::Array(values));
                     *cursor += 1;
                     continue;
@@ -627,7 +654,12 @@ fn parse_list_array(
                 // Use the key from the array header, not the parsed key which includes brackets
                 let array_key = arr_header.key.clone().unwrap_or(key.clone());
                 if !value_part.is_empty() {
-                    let values = parse_inline_array(value_part, arr_header.delimiter, arr_header.length, line.line_number)?;
+                    let values = parse_inline_array(
+                        value_part,
+                        arr_header.delimiter,
+                        arr_header.length,
+                        line.line_number,
+                    )?;
                     obj.insert(array_key, Value::Array(values));
                     *cursor += 1;
                 } else {
@@ -640,22 +672,35 @@ fn parse_list_array(
                 let sibling_depth = item_depth + 1;
                 while *cursor < lines.len() && lines[*cursor].depth == sibling_depth {
                     let sibling_line = &lines[*cursor];
-                    let (sib_key, sib_value_part) = parse_key_value_line(&sibling_line.content, sibling_line.line_number)?;
+                    let (sib_key, sib_value_part) =
+                        parse_key_value_line(&sibling_line.content, sibling_line.line_number)?;
 
                     if let Some(sib_header) = try_parse_array_header(&sibling_line.content)? {
                         let array_key = sib_header.key.clone().unwrap_or(sib_key.clone());
                         if !sib_value_part.is_empty() {
-                            let values = parse_inline_array(sib_value_part, sib_header.delimiter, sib_header.length, sibling_line.line_number)?;
+                            let values = parse_inline_array(
+                                sib_value_part,
+                                sib_header.delimiter,
+                                sib_header.length,
+                                sibling_line.line_number,
+                            )?;
                             obj.insert(array_key, Value::Array(values));
                             *cursor += 1;
                         } else {
                             *cursor += 1;
-                            let value = parse_array_body(lines, cursor, sibling_depth - 1, sib_header, options)?;
+                            let value = parse_array_body(
+                                lines,
+                                cursor,
+                                sibling_depth - 1,
+                                sib_header,
+                                options,
+                            )?;
                             obj.insert(array_key, value);
                         }
                     } else if sib_value_part.is_empty() {
                         *cursor += 1;
-                        let nested_obj = parse_object_at_depth(lines, cursor, sibling_depth + 1, options)?;
+                        let nested_obj =
+                            parse_object_at_depth(lines, cursor, sibling_depth + 1, options)?;
                         obj.insert(sib_key, Value::Object(nested_obj));
                     } else {
                         let value = parse_primitive(sib_value_part, sibling_line.line_number)?;
@@ -677,22 +722,35 @@ fn parse_list_array(
                 let sibling_depth = item_depth + 1;
                 while *cursor < lines.len() && lines[*cursor].depth == sibling_depth {
                     let sibling_line = &lines[*cursor];
-                    let (sib_key, sib_value_part) = parse_key_value_line(&sibling_line.content, sibling_line.line_number)?;
+                    let (sib_key, sib_value_part) =
+                        parse_key_value_line(&sibling_line.content, sibling_line.line_number)?;
 
                     if let Some(sib_header) = try_parse_array_header(&sibling_line.content)? {
                         let array_key = sib_header.key.clone().unwrap_or(sib_key.clone());
                         if !sib_value_part.is_empty() {
-                            let values = parse_inline_array(sib_value_part, sib_header.delimiter, sib_header.length, sibling_line.line_number)?;
+                            let values = parse_inline_array(
+                                sib_value_part,
+                                sib_header.delimiter,
+                                sib_header.length,
+                                sibling_line.line_number,
+                            )?;
                             obj.insert(array_key, Value::Array(values));
                             *cursor += 1;
                         } else {
                             *cursor += 1;
-                            let value = parse_array_body(lines, cursor, sibling_depth - 1, sib_header, options)?;
+                            let value = parse_array_body(
+                                lines,
+                                cursor,
+                                sibling_depth - 1,
+                                sib_header,
+                                options,
+                            )?;
                             obj.insert(array_key, value);
                         }
                     } else if sib_value_part.is_empty() {
                         *cursor += 1;
-                        let nested_obj = parse_object_at_depth(lines, cursor, sibling_depth + 1, options)?;
+                        let nested_obj =
+                            parse_object_at_depth(lines, cursor, sibling_depth + 1, options)?;
                         obj.insert(sib_key, Value::Object(nested_obj));
                     } else {
                         let value = parse_primitive(sib_value_part, sibling_line.line_number)?;
@@ -708,22 +766,35 @@ fn parse_list_array(
                 let sibling_depth = item_depth + 1;
                 while *cursor < lines.len() && lines[*cursor].depth == sibling_depth {
                     let sibling_line = &lines[*cursor];
-                    let (sib_key, sib_value_part) = parse_key_value_line(&sibling_line.content, sibling_line.line_number)?;
+                    let (sib_key, sib_value_part) =
+                        parse_key_value_line(&sibling_line.content, sibling_line.line_number)?;
 
                     if let Some(sib_header) = try_parse_array_header(&sibling_line.content)? {
                         let array_key = sib_header.key.clone().unwrap_or(sib_key.clone());
                         if !sib_value_part.is_empty() {
-                            let values = parse_inline_array(sib_value_part, sib_header.delimiter, sib_header.length, sibling_line.line_number)?;
+                            let values = parse_inline_array(
+                                sib_value_part,
+                                sib_header.delimiter,
+                                sib_header.length,
+                                sibling_line.line_number,
+                            )?;
                             obj.insert(array_key, Value::Array(values));
                             *cursor += 1;
                         } else {
                             *cursor += 1;
-                            let value = parse_array_body(lines, cursor, sibling_depth - 1, sib_header, options)?;
+                            let value = parse_array_body(
+                                lines,
+                                cursor,
+                                sibling_depth - 1,
+                                sib_header,
+                                options,
+                            )?;
                             obj.insert(array_key, value);
                         }
                     } else if sib_value_part.is_empty() {
                         *cursor += 1;
-                        let nested_obj = parse_object_at_depth(lines, cursor, sibling_depth + 1, options)?;
+                        let nested_obj =
+                            parse_object_at_depth(lines, cursor, sibling_depth + 1, options)?;
                         obj.insert(sib_key, Value::Object(nested_obj));
                     } else {
                         let value = parse_primitive(sib_value_part, sibling_line.line_number)?;
@@ -768,21 +839,26 @@ fn parse_inline_array(
         return Err(Error::new(
             ErrorKind::CountMismatch,
             format!("Expected {} values, got {}", expected_count, values.len()),
-        ).with_location(line_number, 1));
+        )
+        .with_location(line_number, 1));
     }
 
     Ok(values)
 }
 
-fn parse_delimited_values(content: &str, delimiter: Delimiter, _line_number: usize) -> Result<Vec<String>> {
+fn parse_delimited_values(
+    content: &str,
+    delimiter: Delimiter,
+    _line_number: usize,
+) -> Result<Vec<String>> {
     let delim_char = delimiter.as_char();
     let mut values = Vec::new();
     let mut current = String::new();
     let mut in_quotes = false;
     let mut escape_next = false;
-    let mut chars = content.chars().peekable();
+    let chars = content.chars().peekable();
 
-    while let Some(ch) = chars.next() {
+    for ch in chars {
         if escape_next {
             current.push(ch);
             escape_next = false;
@@ -833,8 +909,7 @@ fn parse_key_value_line(content: &str, line_number: usize) -> Result<(String, &s
     }
 
     let colon_pos = colon_pos.ok_or_else(|| {
-        Error::new(ErrorKind::MissingColon, "Missing colon after key")
-            .with_location(line_number, 1)
+        Error::new(ErrorKind::MissingColon, "Missing colon after key").with_location(line_number, 1)
     })?;
 
     let key_part = content[..colon_pos].trim();
@@ -922,16 +997,19 @@ fn try_parse_array_header(content: &str) -> Result<Option<ArrayHeader>> {
 
     let bracket_content = &content[bracket_start + 1..bracket_end];
 
-    let (length_str, delimiter) = if bracket_content.ends_with('\t') {
-        (&bracket_content[..bracket_content.len() - 1], Delimiter::Tab)
-    } else if bracket_content.ends_with('|') {
-        (&bracket_content[..bracket_content.len() - 1], Delimiter::Pipe)
+    let (length_str, delimiter) = if let Some(stripped) = bracket_content.strip_suffix('\t') {
+        (stripped, Delimiter::Tab)
+    } else if let Some(stripped) = bracket_content.strip_suffix('|') {
+        (stripped, Delimiter::Pipe)
     } else {
         (bracket_content, Delimiter::Comma)
     };
 
     let length = length_str.parse::<usize>().map_err(|_| {
-        Error::new(ErrorKind::InvalidHeader, format!("Invalid array length: {}", length_str))
+        Error::new(
+            ErrorKind::InvalidHeader,
+            format!("Invalid array length: {}", length_str),
+        )
     })?;
 
     let after_bracket = &content[bracket_end + 1..].trim_start();
@@ -1058,7 +1136,8 @@ fn parse_primitive(content: &str, line_number: usize) -> Result<Value> {
             return Err(Error::new(
                 ErrorKind::UnterminatedString,
                 "String starting with quote must end with quote",
-            ).with_location(line_number, 1));
+            )
+            .with_location(line_number, 1));
         }
         let inner = &trimmed[1..trimmed.len() - 1];
         let unescaped = unescape_string(inner, line_number)?;
@@ -1085,16 +1164,22 @@ fn parse_number(s: &str) -> Result<Number> {
     }
 
     if s.contains('.') || s.contains('e') || s.contains('E') {
-        let f = s.parse::<f64>().map_err(|_| Error::custom("Invalid number"))?;
+        let f = s
+            .parse::<f64>()
+            .map_err(|_| Error::custom("Invalid number"))?;
         Ok(Number::F64(f))
     } else if s.starts_with('-') {
-        let i = s.parse::<i64>().map_err(|_| Error::custom("Invalid number"))?;
+        let i = s
+            .parse::<i64>()
+            .map_err(|_| Error::custom("Invalid number"))?;
         Ok(Number::I64(i))
     } else {
         match s.parse::<u64>() {
             Ok(u) => Ok(Number::U64(u)),
             Err(_) => {
-                let i = s.parse::<i64>().map_err(|_| Error::custom("Invalid number"))?;
+                let i = s
+                    .parse::<i64>()
+                    .map_err(|_| Error::custom("Invalid number"))?;
                 Ok(Number::I64(i))
             }
         }
@@ -1117,13 +1202,15 @@ fn unescape_string(s: &str, line_number: usize) -> Result<String> {
                     return Err(Error::new(
                         ErrorKind::InvalidEscape,
                         format!("Invalid escape sequence: \\{}", other),
-                    ).with_location(line_number, 1));
+                    )
+                    .with_location(line_number, 1));
                 }
                 None => {
                     return Err(Error::new(
                         ErrorKind::UnterminatedString,
                         "Backslash at end of string",
-                    ).with_location(line_number, 1));
+                    )
+                    .with_location(line_number, 1));
                 }
             }
         } else {
@@ -1143,18 +1230,25 @@ fn expand_paths(value: Value, options: &DecoderOptions) -> Result<Value> {
                 let expanded_val = expand_paths(val, options)?;
 
                 // Check if key was originally quoted (marked with \x00 prefix)
-                let (is_quoted, clean_key) = if key.starts_with('\x00') {
-                    (true, key[1..].to_string())
+                let (is_quoted, clean_key) = if let Some(stripped) = key.strip_prefix('\x00') {
+                    (true, stripped.to_string())
                 } else {
                     (false, key.clone())
                 };
 
-                if !is_quoted && options.expand_paths == PathExpansion::Safe && clean_key.contains('.') {
+                if !is_quoted
+                    && options.expand_paths == PathExpansion::Safe
+                    && clean_key.contains('.')
+                {
                     let segments: Vec<&str> = clean_key.split('.').collect();
                     let all_safe = segments.iter().all(|seg| {
-                        !seg.is_empty() &&
-                        seg.chars().next().map(|c| c.is_ascii_alphabetic() || c == '_').unwrap_or(false) &&
-                        seg.chars().all(|c| c.is_ascii_alphanumeric() || c == '_')
+                        !seg.is_empty()
+                            && seg
+                                .chars()
+                                .next()
+                                .map(|c| c.is_ascii_alphabetic() || c == '_')
+                                .unwrap_or(false)
+                            && seg.chars().all(|c| c.is_ascii_alphanumeric() || c == '_')
                     });
 
                     if all_safe && segments.len() > 1 {
@@ -1164,28 +1258,26 @@ fn expand_paths(value: Value, options: &DecoderOptions) -> Result<Value> {
                 }
 
                 let final_key = if is_quoted { clean_key } else { key };
-                if let Some(existing) = result.get(&final_key) {
-                    if options.strict {
-                        if !matches!(existing, Value::Object(_)) || !matches!(&expanded_val, Value::Object(_)) {
-                            return Err(Error::new(
-                                ErrorKind::ExpansionConflict,
-                                format!("Path expansion conflict at '{}'", final_key),
-                            ));
-                        }
-                    }
+                if let Some(existing) = result.get(&final_key)
+                    && options.strict
+                    && (!matches!(existing, Value::Object(_))
+                        || !matches!(&expanded_val, Value::Object(_)))
+                {
+                    return Err(Error::new(
+                        ErrorKind::ExpansionConflict,
+                        format!("Path expansion conflict at '{}'", final_key),
+                    ));
                 }
                 result.insert(final_key, expanded_val);
             }
 
             Ok(Value::Object(result))
         }
-        Value::Array(arr) => {
-            Ok(Value::Array(
-                arr.into_iter()
-                    .map(|v| expand_paths(v, options))
-                    .collect::<Result<Vec<_>>>()?
-            ))
-        }
+        Value::Array(arr) => Ok(Value::Array(
+            arr.into_iter()
+                .map(|v| expand_paths(v, options))
+                .collect::<Result<Vec<_>>>()?,
+        )),
         other => Ok(other),
     }
 }
@@ -1202,15 +1294,14 @@ fn merge_path(
 
     if segments.len() == 1 {
         let key = segments[0].to_string();
-        if let Some(existing) = obj.get(&key) {
-            if !matches!(existing, Value::Object(_)) || !matches!(&value, Value::Object(_)) {
-                if options.strict {
-                    return Err(Error::new(
-                        ErrorKind::ExpansionConflict,
-                        format!("Path expansion conflict at '{}'", key),
-                    ));
-                }
-            }
+        if let Some(existing) = obj.get(&key)
+            && options.strict
+            && (!matches!(existing, Value::Object(_)) || !matches!(&value, Value::Object(_)))
+        {
+            return Err(Error::new(
+                ErrorKind::ExpansionConflict,
+                format!("Path expansion conflict at '{}'", key),
+            ));
         }
         obj.insert(key, value);
         return Ok(());
