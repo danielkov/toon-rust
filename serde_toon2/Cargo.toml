@@ -9,4 +9,9 @@ indexmap = { version = "2.0", features = ["serde"] }
 regex = "1.0"
 
 [dev-dependencies]
-serde_json = "1.0"
+serde_json = { version = "1.0", features = ["preserve_order"] }
+datatest-stable = "0.3.3"
+
+[[test]]
+name = "test_fixtures"
+harness = false

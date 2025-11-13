@@ -26,8 +26,9 @@ cargo test
 cargo test -p serde_toon2
 cargo test -p toon
 
+# run fixtures
+cargo test -p serde_toon2 --test test_fixtures
 # Run a single test
-cargo test -p serde_toon2 --test test_fixtures -- encode_fixtures
 cargo test -p serde_toon2 test_name
 
 # Run the CLI
@@ -52,6 +53,7 @@ Core library providing TOON format serialization/deserialization:
 - **de.rs**: Deserializer implementation that parses TOON into Rust types. Uses a two-phase approach: tokenization (line parsing with depth tracking) followed by recursive descent parsing. Supports strict mode validation and path expansion.
 
 - **options.rs**: Configuration types:
+
   - `EncoderOptions`: indent size, delimiter (comma/tab/pipe), key folding, flatten depth
   - `DecoderOptions`: indent size, strict mode, path expansion
   - `Delimiter`: enum for array row delimiters (comma, tab, pipe)
@@ -61,6 +63,7 @@ Core library providing TOON format serialization/deserialization:
 ### CLI Crate
 
 Simple converter tool (cli/src/main.rs) that:
+
 1. Accepts input as file path, URL, or raw string
 2. Auto-detects JSON vs TOON format
 3. Converts between formats and outputs to stdout
@@ -68,10 +71,12 @@ Simple converter tool (cli/src/main.rs) that:
 ### Test Strategy
 
 Tests are fixture-based using JSON test definitions in `serde_toon2/tests/fixtures/`:
+
 - `encode/`: JSON → TOON conversion tests
 - `decode/`: TOON → JSON conversion tests
 
 Each fixture file contains a `version` field and array of `tests` with:
+
 - `name`: test description
 - `input`: source data
 - `expected`: expected output
@@ -97,6 +102,7 @@ Each fixture file contains a `version` field and array of `tests` with:
 ## Specification Reference
 
 Full TOON specification is in SPEC.md (large file). Key sections:
+
 - Section 6: Header syntax
 - Section 7: String/key quoting rules
 - Section 9: Array format

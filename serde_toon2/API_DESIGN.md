@@ -22,6 +22,7 @@ serde_toon2/
 ### Top-Level Functions
 
 #### Deserialization
+
 ```rust
 // Deserialize from TOON string
 pub fn from_str<'a, T: Deserialize<'a>>(s: &'a str) -> Result<T>
@@ -40,6 +41,7 @@ pub fn from_str_with_options<'a, T: Deserialize<'a>>(
 ```
 
 #### Serialization
+
 ```rust
 // Serialize to TOON string
 pub fn to_string<T: Serialize>(value: &T) -> Result<String>
@@ -157,17 +159,20 @@ pub enum ErrorKind {
 ## Implementation Strategy
 
 ### Phase 1: Value & Error Types
+
 - Implement `Value` enum with helper methods
 - Implement `Error` type with Display trait
 - Basic configuration structs
 
 ### Phase 2: Serialization
+
 - Implement `Serializer` that converts `T: Serialize` to TOON format
 - Handle all TOON data types (primitives, objects, arrays, tabular)
 - Support delimiter variations
 - Implement key folding (optional)
 
 ### Phase 3: Deserialization
+
 - Implement tokenizer/lexer for TOON format
 - Implement `Deserializer` that converts TOON to `T: Deserialize`
 - Handle all TOON forms (root detection, objects, arrays, etc.)
@@ -175,6 +180,7 @@ pub enum ErrorKind {
 - Implement path expansion (optional)
 
 ### Phase 4: Testing
+
 - Build comprehensive test fixtures
 - Ensure all spec fixtures pass
 - Test reversibility (JSON ↔ TOON ↔ JSON)

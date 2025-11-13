@@ -1,10 +1,8 @@
-use std::{
-    fs::{read_dir, File},
-    io::Read,
-};
+use std::{fs::File, io::Read, path::Path};
 
+use datatest_stable::Result;
 use serde::Deserialize;
-use serde_toon2::{Delimiter, DecoderOptions, EncoderOptions, KeyFolding, PathExpansion};
+use serde_toon2::{DecoderOptions, Delimiter, EncoderOptions, KeyFolding, PathExpansion};
 
 #[derive(Deserialize)]
 struct DecodeTestOptions {
@@ -111,94 +109,83 @@ struct Fixture<T: serde::de::DeserializeOwned> {
     tests: Vec<T>,
 }
 
-#[test]
-fn encode_fixtures() {
-    // find all files in ./fixtures/encode
-    let files =
-        read_dir("./tests/fixtures/encode").expect("couldn't find encode fixtures directory");
+fn test_encode_fixture(path: &Path) -> Result<()> {
+    let mut file = File::open(path)?;
+    let mut json_string = String::new();
+    file.read_to_string(&mut json_string)?;
 
-    for entry in files {
-        let entry = entry.expect("expected dir entry");
-        let path = entry.path();
-        let mut file = File::open(path).expect("expected file to open");
-        let mut json_string = String::new();
-        file.read_to_string(&mut json_string)
-            .expect("expected to be able to read file to string");
+    let fixture: Fixture<EncodeTest> = serde_json::from_str(&json_string)?;
 
-        let fixture: Fixture<EncodeTest> = serde_json::from_str(&json_string)
-            .expect("expected to be able to parse file to Fixture");
+    for test in fixture.tests {
+        let result = if let Some(options) = test.options {
+            let opts = options.to_encoder_options();
+            serde_toon2::to_string_with_options(&test.input, opts)
+        } else {
+            serde_toon2::to_string(&test.input)
+        };
 
-        for test in fixture.tests {
-            let result = if let Some(options) = test.options {
-                let opts = options.to_encoder_options();
-                serde_toon2::to_string_with_options(&test.input, opts)
-            } else {
-                serde_toon2::to_string(&test.input)
-            };
-
-            if test.should_error {
-                assert!(
-                    result.is_err(),
-                    "expected error but got success: fixture: {}, spec: {}",
-                    test.name, test.spec_section
-                );
-            } else {
-                let output = result.expect(&format!(
-                    "encode failed: fixture: {}, spec: {}",
-                    test.name, test.spec_section
-                ));
-                assert_eq!(
-                    output, test.expected,
-                    "result does not match expected: {}, spec: {}",
-                    test.name, test.spec_section
-                );
-            }
+        if test.should_error {
+            assert!(
+                result.is_err(),
+                "expected error but got success: fixture: {}, spec: {}",
+                test.name,
+                test.spec_section
+            );
+        } else {
+            let output = result.expect(&format!(
+                "encode failed: fixture: {}, spec: {}",
+                test.name, test.spec_section
+            ));
+            assert_eq!(
+                output, test.expected,
+                "result does not match expected: {}, spec: {}",
+                test.name, test.spec_section
+            );
         }
     }
+
+    Ok(())
 }
 
-#[test]
-fn decode_fixtures() {
-    let files =
-        read_dir("./tests/fixtures/decode").expect("couldn't find decode fixtures directory");
+fn test_decode_fixture(path: &Path) -> Result<()> {
+    let mut file = File::open(path)?;
+    let mut json_string = String::new();
+    file.read_to_string(&mut json_string)?;
 
-    for entry in files {
-        let entry = entry.expect("expected dir entry");
-        let path = entry.path();
-        let mut file = File::open(path).expect("expected file to open");
-        let mut json_string = String::new();
-        file.read_to_string(&mut json_string)
-            .expect("expected to be able to read file to string");
+    let fixture: Fixture<DecodeTest> = serde_json::from_str(&json_string)?;
 
-        let json_string = json_string;
-        let fixture: Fixture<DecodeTest> = serde_json::from_str(&json_string)
-            .expect("expected to be able to parse file to Fixture");
+    for test in fixture.tests {
+        let result = if let Some(options) = test.options {
+            let opts = options.to_decoder_options();
+            serde_toon2::from_str_with_options(&test.input, opts)
+        } else {
+            serde_toon2::from_str(&test.input)
+        };
 
-        for test in fixture.tests {
-            let result = if let Some(options) = test.options {
-                let opts = options.to_decoder_options();
-                serde_toon2::from_str_with_options(&test.input, opts)
-            } else {
-                serde_toon2::from_str(&test.input)
-            };
-
-            if test.should_error {
-                assert!(
-                    result.is_err(),
-                    "expected error but got success: fixture {}, spec: {}",
-                    test.name, test.spec_section
-                );
-            } else {
-                let output: serde_json::Value = result.expect(&format!(
-                    "decode failed: fixture {}, spec: {}",
-                    test.name, test.spec_section
-                ));
-                assert_eq!(
-                    output, test.expected,
-                    "result does not match expected: {}, spec: {}",
-                    test.name, test.spec_section
-                );
-            }
+        if test.should_error {
+            assert!(
+                result.is_err(),
+                "expected error but got success: fixture {}, spec: {}",
+                test.name,
+                test.spec_section
+            );
+        } else {
+            let output: serde_json::Value = result.expect(&format!(
+                "decode failed: fixture {}, spec: {}",
+                test.name, test.spec_section
+            ));
+            assert_eq!(
+                output, test.expected,
+                "result does not match expected: {}, spec: {}",
+                test.name, test.spec_section
+            );
         }
     }
+
+    Ok(())
+}
+
+datatest_stable::harness! {
+    { test = test_encode_fixture, root = "tests/fixtures/encode", pattern = r"^.*\.json$" },
+    { test = test_decode_fixture, root = "tests/fixtures/decode", pattern = r"^.*\.json$" },
 }

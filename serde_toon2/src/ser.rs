@@ -9,6 +9,7 @@ pub struct Serializer<W> {
     options: EncoderOptions,
     depth: usize,
     document_delimiter: Delimiter,
+    top_level_keys: std::collections::HashSet<String>,
 }
 
 impl<W: Write> Serializer<W> {
@@ -19,6 +20,7 @@ impl<W: Write> Serializer<W> {
             options,
             depth: 0,
             document_delimiter,
+            top_level_keys: std::collections::HashSet::new(),
         }
     }
 
@@ -135,14 +137,24 @@ impl<W: Write> Serializer<W> {
         match value {
             Value::Null => {
                 if let Some(k) = key {
-                    write!(self.writer, "{}{}: null", self.indent(), k)?;
+                    let quoted_key = if self.key_needs_quoting(k) {
+                        format!("\"{}\"", self.escape_string(k))
+                    } else {
+                        k.to_string()
+                    };
+                    write!(self.writer, "{}{}: null", self.indent(), quoted_key)?;
                 } else {
                     write!(self.writer, "null")?;
                 }
             }
             Value::Bool(b) => {
                 if let Some(k) = key {
-                    write!(self.writer, "{}{}: {}", self.indent(), k, b)?;
+                    let quoted_key = if self.key_needs_quoting(k) {
+                        format!("\"{}\"", self.escape_string(k))
+                    } else {
+                        k.to_string()
+                    };
+                    write!(self.writer, "{}{}: {}", self.indent(), quoted_key, b)?;
                 } else {
                     write!(self.writer, "{}", b)?;
                 }
@@ -150,14 +162,24 @@ impl<W: Write> Serializer<W> {
             Value::Number(n) => {
                 let formatted = self.format_number(n);
                 if let Some(k) = key {
-                    write!(self.writer, "{}{}: {}", self.indent(), k, formatted)?;
+                    let quoted_key = if self.key_needs_quoting(k) {
+                        format!("\"{}\"", self.escape_string(k))
+                    } else {
+                        k.to_string()
+                    };
+                    write!(self.writer, "{}{}: {}", self.indent(), quoted_key, formatted)?;
                 } else {
                     write!(self.writer, "{}", formatted)?;
                 }
             }
             Value::String(s) => {
                 if let Some(k) = key {
-                    write!(self.writer, "{}{}: ", self.indent(), k)?;
+                    let quoted_key = if self.key_needs_quoting(k) {
+                        format!("\"{}\"", self.escape_string(k))
+                    } else {
+                        k.to_string()
+                    };
+                    write!(self.writer, "{}{}: ", self.indent(), quoted_key)?;
                     self.write_string(s, active_delimiter)?;
                 } else {
                     self.write_string(s, active_delimiter)?;
@@ -271,6 +293,15 @@ impl<W: Write> Serializer<W> {
     ) -> Result<()> {
         let len = arr.len();
         let header_delim = active_delimiter.header_marker();
+
+        if arr.is_empty() {
+            if let Some(k) = key {
+                write!(self.writer, "{}{}[{}{}]:", self.indent(), k, len, header_delim)?;
+            } else {
+                write!(self.writer, "[{}{}]:", len, header_delim)?;
+            }
+            return Ok(());
+        }
 
         if let Some(k) = key {
             write!(self.writer, "{}{}[{}{}]: ", self.indent(), k, len, header_delim)?;
@@ -439,7 +470,123 @@ impl<W: Write> Serializer<W> {
                         self.write_string(s, self.document_delimiter)?;
                     }
                     Value::Array(arr) => {
-                        self.serialize_array(arr, Some(key), active_delimiter)?;
+                        if self.is_primitive_array(arr) {
+                            let len = arr.len();
+                            let header_delim = active_delimiter.header_marker();
+                            if arr.is_empty() {
+                                write!(self.writer, "{}[{}{}]:", quoted_key, len, header_delim)?;
+                            } else {
+                                write!(self.writer, "{}[{}{}]: ", quoted_key, len, header_delim)?;
+                                for (i, val) in arr.iter().enumerate() {
+                                    if i > 0 {
+                                        write!(self.writer, "{}", active_delimiter.as_str())?;
+                                    }
+                                    match val {
+                                        Value::Null => write!(self.writer, "null")?,
+                                        Value::Bool(b) => write!(self.writer, "{}", b)?,
+                                        Value::Number(n) => write!(self.writer, "{}", self.format_number(n))?,
+                                        Value::String(s) => self.write_string(s, active_delimiter)?,
+                                        _ => unreachable!(),
+                                    }
+                                }
+                            }
+                        } else if self.is_array_of_arrays(arr) {
+                            let len = arr.len();
+                            let header_delim = active_delimiter.header_marker();
+                            write!(self.writer, "{}[{}{}]:", quoted_key, len, header_delim)?;
+                            self.depth += 1;
+                            for inner_arr in arr {
+                                if let Value::Array(inner) = inner_arr {
+                                    write!(self.writer, "\n{}- ", self.indent())?;
+                                    self.serialize_primitive_array(inner, None, active_delimiter)?;
+                                }
+                            }
+                            self.depth -= 1;
+                        } else if let Some((is_tabular, fields)) = self.detect_tabular(arr) {
+                            if is_tabular {
+                                let len = arr.len();
+                                let header_delim = active_delimiter.header_marker();
+                                write!(self.writer, "{}[{}{}]{{", quoted_key, len, header_delim)?;
+                                for (i, field) in fields.iter().enumerate() {
+                                    if i > 0 {
+                                        write!(self.writer, "{}", active_delimiter.as_str())?;
+                                    }
+                                    if self.key_needs_quoting(field) {
+                                        write!(self.writer, "\"{}\"", self.escape_string(field))?;
+                                    } else {
+                                        write!(self.writer, "{}", field)?;
+                                    }
+                                }
+                                write!(self.writer, "}}:")?;
+                                self.depth += 1;
+                                for obj in arr {
+                                    if let Value::Object(map) = obj {
+                                        write!(self.writer, "\n{}", self.indent())?;
+                                        for (i, field_name) in fields.iter().enumerate() {
+                                            if i > 0 {
+                                                write!(self.writer, "{}", active_delimiter.as_str())?;
+                                            }
+                                            if let Some(val) = map.get(field_name) {
+                                                match val {
+                                                    Value::Null => write!(self.writer, "null")?,
+                                                    Value::Bool(b) => write!(self.writer, "{}", b)?,
+                                                    Value::Number(n) => write!(self.writer, "{}", self.format_number(n))?,
+                                                    Value::String(s) => self.write_string(s, active_delimiter)?,
+                                                    _ => unreachable!(),
+                                                }
+                                            }
+                                        }
+                                    }
+                                }
+                                self.depth -= 1;
+                            } else {
+                                let len = arr.len();
+                                let header_delim = active_delimiter.header_marker();
+                                write!(self.writer, "{}[{}{}]:", quoted_key, len, header_delim)?;
+                                self.depth += 1;
+                                for item in arr {
+                                    write!(self.writer, "\n{}- ", self.indent())?;
+                                    match item {
+                                        Value::Null => write!(self.writer, "null")?,
+                                        Value::Bool(b) => write!(self.writer, "{}", b)?,
+                                        Value::Number(n) => write!(self.writer, "{}", self.format_number(n))?,
+                                        Value::String(s) => {
+                                            self.write_string(s, active_delimiter)?;
+                                        }
+                                        Value::Array(inner) => {
+                                            self.serialize_primitive_array(inner, None, active_delimiter)?;
+                                        }
+                                        Value::Object(obj) => {
+                                            self.serialize_object_as_list_item(obj, active_delimiter)?;
+                                        }
+                                    }
+                                }
+                                self.depth -= 1;
+                            }
+                        } else {
+                            let len = arr.len();
+                            let header_delim = active_delimiter.header_marker();
+                            write!(self.writer, "{}[{}{}]:", quoted_key, len, header_delim)?;
+                            self.depth += 1;
+                            for item in arr {
+                                write!(self.writer, "\n{}- ", self.indent())?;
+                                match item {
+                                    Value::Null => write!(self.writer, "null")?,
+                                    Value::Bool(b) => write!(self.writer, "{}", b)?,
+                                    Value::Number(n) => write!(self.writer, "{}", self.format_number(n))?,
+                                    Value::String(s) => {
+                                        self.write_string(s, active_delimiter)?;
+                                    }
+                                    Value::Array(inner) => {
+                                        self.serialize_primitive_array(inner, None, active_delimiter)?;
+                                    }
+                                    Value::Object(obj) => {
+                                        self.serialize_object_as_list_item(obj, active_delimiter)?;
+                                    }
+                                }
+                            }
+                            self.depth -= 1;
+                        }
                     }
                     Value::Object(nested) => {
                         write!(self.writer, "{}:", quoted_key)?;
@@ -453,8 +600,39 @@ impl<W: Write> Serializer<W> {
                 }
                 first = false;
             } else {
-                write!(self.writer, "\n")?;
-                self.serialize_value_with_key(value, Some(key), self.document_delimiter)?;
+                let quoted_key = if self.key_needs_quoting(key) {
+                    format!("\"{}\"", self.escape_string(key))
+                } else {
+                    key.clone()
+                };
+
+                let extra_indent = " ".repeat(self.options.indent);
+                let field_indent = format!("{}{}", self.indent(), extra_indent);
+
+                match value {
+                    Value::Null => write!(self.writer, "\n{}{}: null", field_indent, quoted_key)?,
+                    Value::Bool(b) => write!(self.writer, "\n{}{}: {}", field_indent, quoted_key, b)?,
+                    Value::Number(n) => write!(self.writer, "\n{}{}: {}", field_indent, quoted_key, self.format_number(n))?,
+                    Value::String(s) => {
+                        write!(self.writer, "\n{}{}: ", field_indent, quoted_key)?;
+                        self.write_string(s, self.document_delimiter)?;
+                    }
+                    Value::Array(arr) => {
+                        write!(self.writer, "\n")?;
+                        self.depth += 1;
+                        self.serialize_array(arr, Some(key), active_delimiter)?;
+                        self.depth -= 1;
+                    }
+                    Value::Object(nested) => {
+                        write!(self.writer, "\n{}{}:", field_indent, quoted_key)?;
+                        self.depth += 2;
+                        for (nested_key, nested_val) in nested {
+                            write!(self.writer, "\n")?;
+                            self.serialize_value_with_key(nested_val, Some(nested_key), self.document_delimiter)?;
+                        }
+                        self.depth -= 2;
+                    }
+                }
             }
         }
 
@@ -478,27 +656,104 @@ impl<W: Write> Serializer<W> {
         false
     }
 
+    fn try_fold_object(&self, obj: &Map<String, Value>, num_segments: usize) -> Option<(String, Value)> {
+        use crate::options::KeyFolding;
+
+        // Key folding must be enabled
+        if self.options.key_folding != KeyFolding::Safe {
+            return None;
+        }
+
+        // Only fold single-key objects
+        if obj.len() != 1 {
+            return None;
+        }
+
+        let (key, value) = obj.iter().next().unwrap();
+
+        // In safe mode, don't fold keys that need quoting
+        if self.key_needs_quoting(key) {
+            return None;
+        }
+
+        // Count the current segment
+        let new_num_segments = num_segments + 1;
+
+        // Check flatten depth limit - have we reached the maximum?
+        if new_num_segments > self.options.flatten_depth {
+            // We've exceeded the limit, stop folding
+            return None;
+        }
+
+        // Try to continue folding if the value is a single-key object
+        if let Value::Object(nested_obj) = value {
+            // Only recurse if we haven't reached the limit yet
+            if new_num_segments < self.options.flatten_depth {
+                if let Some((nested_path, final_value)) = self.try_fold_object(nested_obj, new_num_segments) {
+                    let full_path = format!("{}.{}", key, nested_path);
+                    return Some((full_path, final_value));
+                }
+            }
+            // If we've reached the limit exactly, return just this key
+            // without trying to fold further
+        }
+
+        // This is the end of the foldable chain (either we hit the limit or the value isn't an object)
+        Some((key.clone(), value.clone()))
+    }
+
     fn serialize_object(&mut self, obj: &Map<String, Value>, key: Option<&str>) -> Result<()> {
         if obj.is_empty() {
             if let Some(k) = key {
-                write!(self.writer, "{}{}:", self.indent(), k)?;
+                let quoted_key = if self.key_needs_quoting(k) {
+                    format!("\"{}\"", self.escape_string(k))
+                } else {
+                    k.to_string()
+                };
+                write!(self.writer, "{}{}:", self.indent(), quoted_key)?;
             }
             return Ok(());
         }
 
         if let Some(k) = key {
-            write!(self.writer, "{}{}:", self.indent(), k)?;
+            let quoted_key = if self.key_needs_quoting(k) {
+                format!("\"{}\"", self.escape_string(k))
+            } else {
+                k.to_string()
+            };
+            write!(self.writer, "{}{}:", self.indent(), quoted_key)?;
             self.depth += 1;
+
             for (obj_key, obj_val) in obj {
                 write!(self.writer, "\n")?;
                 self.serialize_value_with_key(obj_val, Some(obj_key), self.document_delimiter)?;
             }
             self.depth -= 1;
         } else {
+            // We're at the top level - collect all keys for collision detection
+            self.top_level_keys = obj.keys().cloned().collect();
+
             for (i, (obj_key, obj_val)) in obj.iter().enumerate() {
                 if i > 0 {
                     write!(self.writer, "\n")?;
                 }
+
+                // Try to fold if it's an object
+                if let Value::Object(nested_obj) = obj_val {
+                    // In safe mode, don't fold if the parent key needs quoting
+                    if !self.key_needs_quoting(obj_key) {
+                        // Start with 1 to account for the current key (obj_key)
+                        if let Some((folded_path, final_value)) = self.try_fold_object(nested_obj, 1) {
+                            let full_key = format!("{}.{}", obj_key, folded_path);
+                            // Check for collision with sibling keys at this (top) level
+                            if !self.top_level_keys.contains(&full_key) {
+                                self.serialize_value_with_key(&final_value, Some(&full_key), self.document_delimiter)?;
+                                continue;
+                            }
+                        }
+                    }
+                }
+
                 self.serialize_value_with_key(obj_val, Some(obj_key), self.document_delimiter)?;
             }
         }

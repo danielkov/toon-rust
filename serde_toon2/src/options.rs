@@ -30,7 +30,7 @@ impl Default for DecoderOptions {
     fn default() -> Self {
         DecoderOptions {
             indent: 2,
-            strict: true,
+            strict: false,
             expand_paths: PathExpansion::Off,
         }
     }

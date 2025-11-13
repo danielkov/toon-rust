@@ -64,10 +64,10 @@ async fn process(input: &str) -> Result<(), Box<dyn std::error::Error>> {
 
     match serde_json::from_str::<serde_json::Value>(&content) {
         Ok(json) => {
-            let toon_str = serde_toon::to_string(&json)?;
+            let toon_str = serde_toon2::to_string(&json)?;
             print!("{}", toon_str);
         }
-        Err(json_err) => match serde_toon::from_str::<serde_json::Value>(&content) {
+        Err(json_err) => match serde_toon2::from_str::<serde_json::Value>(&content) {
             Ok(value) => {
                 let json_str = serde_json::to_string_pretty(&value)?;
                 print!("{}", json_str);
