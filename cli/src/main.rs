@@ -40,6 +40,12 @@ enum PathExpansionArg {
     Safe,
 }
 
+#[derive(Debug, Clone, Copy, ValueEnum)]
+enum OutputTypeArg {
+    Json,
+    Yaml,
+}
+
 impl From<PathExpansionArg> for PathExpansion {
     fn from(arg: PathExpansionArg) -> Self {
         match arg {
@@ -51,9 +57,9 @@ impl From<PathExpansionArg> for PathExpansion {
 
 #[derive(Debug, Parser)]
 #[command(name = "toon")]
-#[command(about = "Convert between JSON and TOON formats", long_about = None)]
+#[command(about = "Convert between JSON/YAML and TOON formats", long_about = None)]
 #[command(after_help = "\x1b[1;4mExamples:\x1b[0m
-  Convert JSON from a URL to TOON format:
+  Convert JSON or YAML from a URL to TOON format:
     \x1b[1mtoon encode\x1b[0m https://api.github.com/users
 
   Convert a local JSON file to TOON:
@@ -80,9 +86,9 @@ struct Cli {
 
 #[derive(Debug, Subcommand)]
 enum Command {
-    #[command(alias = "e", about = "Encode JSON to TOON format")]
+    #[command(alias = "e", about = "Encode JSON or YAML to TOON format")]
     Encode {
-        #[arg(help = "Input source: file path, URL, or raw JSON string")]
+        #[arg(help = "Input source: file path, URL, or raw JSON or YAML string")]
         input: String,
 
         #[arg(
@@ -107,7 +113,7 @@ enum Command {
         flatten_depth: Option<usize>,
     },
 
-    #[command(alias = "d", about = "Decode TOON to JSON format")]
+    #[command(alias = "d", about = "Decode TOON to JSON or YAML format")]
     Decode {
         #[arg(help = "Input source: file path, URL, or raw TOON string")]
         input: String,
@@ -124,6 +130,9 @@ enum Command {
 
         #[arg(long, value_enum, help = "Path expansion mode", default_value = "off")]
         expand_paths: PathExpansionArg,
+
+        #[arg(short, long, value_enum, help = "Output type", default_value = "json")]
+        output_type: OutputTypeArg,
     },
 }
 
@@ -172,7 +181,14 @@ async fn process(cli: &Cli) -> Result<(), Box<dyn std::error::Error>> {
             flatten_depth,
         } => {
             let content = get_input_content(input).await?;
-            let json: serde_json::Value = serde_json::from_str(&content)?;
+
+            // attempt to parse as JSON first
+            // JSON parsing fails on missing opening `{` for most inputs
+            let data: serde_json::Value = match serde_json::from_str(&content) {
+                Ok(json) => json,
+                // try YAML instead
+                Err(_) => serde_yaml::from_str(&content)?,
+            };
 
             let encoder_opts = EncoderOptions {
                 indent: *indent,
@@ -181,7 +197,7 @@ async fn process(cli: &Cli) -> Result<(), Box<dyn std::error::Error>> {
                 flatten_depth: flatten_depth.unwrap_or(usize::MAX),
             };
 
-            let toon_str = serde_toon2::to_string_with_options(&json, encoder_opts)?;
+            let toon_str = serde_toon2::to_string_with_options(&data, encoder_opts)?;
             print!("{}", toon_str);
         }
         Command::Decode {
@@ -189,6 +205,7 @@ async fn process(cli: &Cli) -> Result<(), Box<dyn std::error::Error>> {
             indent,
             strict,
             expand_paths,
+            output_type,
         } => {
             let content = get_input_content(input).await?;
 
@@ -200,8 +217,11 @@ async fn process(cli: &Cli) -> Result<(), Box<dyn std::error::Error>> {
 
             let value: serde_json::Value =
                 serde_toon2::from_str_with_options(&content, decoder_opts)?;
-            let json_str = serde_json::to_string_pretty(&value)?;
-            print!("{}", json_str);
+
+            match output_type {
+                OutputTypeArg::Json => print!("{}", serde_json::to_string_pretty(&value)?),
+                OutputTypeArg::Yaml => print!("{}", serde_yaml::to_string(&value)?),
+            }
         }
     }
 
