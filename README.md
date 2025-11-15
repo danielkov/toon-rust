@@ -1,6 +1,6 @@
 # toon
 
-Command-line tool for converting between JSON and TOON (Token-Oriented Object Notation) formats.
+Command-line tool for converting between JSON/YAML and TOON (Token-Oriented Object Notation) formats.
 
 ## Installation
 
@@ -10,9 +10,9 @@ cargo install --git https://github.com/danielkov/toon-rust
 
 ## Usage
 
-The CLI provides two subcommands: `encode` (JSON → TOON) and `decode` (TOON → JSON).
+The CLI provides two subcommands: `encode` (JSON/YAML → TOON) and `decode` (TOON → JSON/YAML).
 
-### Encode JSON to TOON
+### Encode JSON/YAML to TOON
 
 ```sh
 toon encode [OPTIONS] <INPUT>
@@ -32,6 +32,9 @@ toon e [OPTIONS] <INPUT>  # short alias
 # Convert JSON file to TOON
 toon encode data.json
 
+# Convert YAML file to TOON
+toon encode data.yaml
+
 # Fetch and convert JSON from URL
 toon encode https://api.github.com/users
 
@@ -42,7 +45,7 @@ toon e '{"name":"Alice","age":30}'
 toon encode --delimiter pipe data.json
 ```
 
-### Decode TOON to JSON
+### Decode TOON to JSON/YAML
 
 ```sh
 toon decode [OPTIONS] <INPUT>
@@ -54,12 +57,17 @@ toon d [OPTIONS] <INPUT>  # short alias
 - `--indent <NUM>` - Spaces per indentation level (default: 2)
 - `--strict` - Enable strict validation mode
 - `--expand-paths <off|safe>` - Path expansion mode (default: off)
+- `-o, --output-type <json|yaml>` - Output format (default: json)
 
 **Examples:**
 
 ```sh
 # Convert TOON file to JSON
 toon decode data.toon
+
+# Convert TOON to YAML
+toon decode --output-type yaml data.toon
+toon d -o yaml data.toon
 
 # Convert inline TOON string
 toon d 'name Alice age 30'
