@@ -664,7 +664,8 @@ fn parse_list_array(
                     *cursor += 1;
                 } else {
                     *cursor += 1;
-                    let value = parse_array_body(lines, cursor, item_depth, arr_header, options)?;
+                    let value =
+                        parse_array_body(lines, cursor, item_depth + 1, arr_header, options)?;
                     obj.insert(array_key, value);
                 }
 
@@ -691,7 +692,7 @@ fn parse_list_array(
                             let value = parse_array_body(
                                 lines,
                                 cursor,
-                                sibling_depth - 1,
+                                sibling_depth,
                                 sib_header,
                                 options,
                             )?;
@@ -741,7 +742,7 @@ fn parse_list_array(
                             let value = parse_array_body(
                                 lines,
                                 cursor,
-                                sibling_depth - 1,
+                                sibling_depth,
                                 sib_header,
                                 options,
                             )?;
@@ -785,7 +786,7 @@ fn parse_list_array(
                             let value = parse_array_body(
                                 lines,
                                 cursor,
-                                sibling_depth - 1,
+                                sibling_depth,
                                 sib_header,
                                 options,
                             )?;
@@ -987,7 +988,7 @@ fn try_parse_array_header(content: &str) -> Result<Option<ArrayHeader>> {
         if key_str.is_empty() {
             None
         } else if key_str.starts_with('"') && key_str.ends_with('"') {
-            Some(key_str[1..key_str.len() - 1].to_string())
+            Some(unescape_string(&key_str[1..key_str.len() - 1], 0)?)
         } else {
             Some(key_str.to_string())
         }
@@ -1005,16 +1006,14 @@ fn try_parse_array_header(content: &str) -> Result<Option<ArrayHeader>> {
         (bracket_content, Delimiter::Comma)
     };
 
-    let length = length_str.parse::<usize>().map_err(|_| {
-        Error::new(
-            ErrorKind::InvalidHeader,
-            format!("Invalid array length: {}", length_str),
-        )
-    })?;
+    let length = match length_str.parse::<usize>() {
+        Ok(l) => l,
+        Err(_) => return Ok(None),
+    };
 
-    let after_bracket = &content[bracket_end + 1..].trim_start();
+    let after_bracket = content[bracket_end + 1..].trim_start();
 
-    let fields = if after_bracket.starts_with('{') {
+    let (fields, remaining) = if after_bracket.starts_with('{') {
         let mut close_brace_pos = None;
         let mut in_quotes = false;
         let mut escape_next = false;
@@ -1055,13 +1054,18 @@ fn try_parse_array_header(content: &str) -> Result<Option<ArrayHeader>> {
                 fields.push(field);
             }
 
-            Some(fields)
+            (Some(fields), &after_bracket[close_brace + 1..])
         } else {
-            None
+            (None, after_bracket)
         }
     } else {
-        None
+        (None, after_bracket)
     };
+
+    // After bracket and optional field list, must have ':'
+    if !remaining.trim_start().starts_with(':') {
+        return Ok(None);
+    }
 
     Ok(Some(ArrayHeader {
         key: key_part,
@@ -1160,6 +1164,10 @@ fn parse_primitive(content: &str, line_number: usize) -> Result<Value> {
 
 fn parse_number(s: &str) -> Result<Number> {
     if s.starts_with('0') && s.len() > 1 && s.chars().nth(1).unwrap().is_ascii_digit() {
+        return Err(Error::custom("Leading zeros not allowed"));
+    }
+
+    if s.starts_with("-0") && s.len() > 2 && s.as_bytes()[2].is_ascii_digit() {
         return Err(Error::custom("Leading zeros not allowed"));
     }
 

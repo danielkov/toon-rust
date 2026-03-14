@@ -290,11 +290,12 @@ impl<W: Write> Serializer<W> {
         if arr.is_empty() {
             let header_delim = active_delimiter.header_marker();
             if let Some(k) = key {
+                let qk = self.quote_key(k);
                 write!(
                     self.writer,
                     "{}{}[{}{}]:",
                     self.indent(),
-                    k,
+                    qk,
                     len,
                     header_delim
                 )?;
@@ -396,11 +397,12 @@ impl<W: Write> Serializer<W> {
 
         if arr.is_empty() {
             if let Some(k) = key {
+                let qk = self.quote_key(k);
                 write!(
                     self.writer,
                     "{}{}[{}{}]:",
                     self.indent(),
-                    k,
+                    qk,
                     len,
                     header_delim
                 )?;
@@ -411,11 +413,12 @@ impl<W: Write> Serializer<W> {
         }
 
         if let Some(k) = key {
+            let qk = self.quote_key(k);
             write!(
                 self.writer,
                 "{}{}[{}{}]: ",
                 self.indent(),
-                k,
+                qk,
                 len,
                 header_delim
             )?;
@@ -449,11 +452,12 @@ impl<W: Write> Serializer<W> {
         let header_delim = active_delimiter.header_marker();
 
         if let Some(k) = key {
+            let qk = self.quote_key(k);
             write!(
                 self.writer,
                 "{}{}[{}{}]:",
                 self.indent(),
-                k,
+                qk,
                 len,
                 header_delim
             )?;
@@ -484,11 +488,12 @@ impl<W: Write> Serializer<W> {
         let header_delim = active_delimiter.header_marker();
 
         if let Some(k) = key {
+            let qk = self.quote_key(k);
             write!(
                 self.writer,
                 "{}{}[{}{}]{{",
                 self.indent(),
-                k,
+                qk,
                 len,
                 header_delim
             )?;
@@ -543,11 +548,12 @@ impl<W: Write> Serializer<W> {
         let header_delim = active_delimiter.header_marker();
 
         if let Some(k) = key {
+            let qk = self.quote_key(k);
             write!(
                 self.writer,
                 "{}{}[{}{}]:",
                 self.indent(),
-                k,
+                qk,
                 len,
                 header_delim
             )?;
@@ -557,6 +563,12 @@ impl<W: Write> Serializer<W> {
 
         self.depth += 1;
         for item in arr {
+            if let Value::Object(obj) = item
+                && obj.is_empty()
+            {
+                write!(self.writer, "\n{}-", self.indent())?;
+                continue;
+            }
             write!(self.writer, "\n{}- ", self.indent())?;
             match item {
                 Value::Null => write!(self.writer, "null")?,
@@ -566,7 +578,7 @@ impl<W: Write> Serializer<W> {
                     self.write_string(s, active_delimiter)?;
                 }
                 Value::Array(inner) => {
-                    self.serialize_primitive_array(inner, None, active_delimiter)?;
+                    self.serialize_array(inner, None, active_delimiter)?;
                 }
                 Value::Object(obj) => {
                     self.serialize_object_as_list_item(obj, active_delimiter)?;
@@ -635,14 +647,14 @@ impl<W: Write> Serializer<W> {
                             let len = arr.len();
                             let header_delim = active_delimiter.header_marker();
                             write!(self.writer, "{}[{}{}]:", quoted_key, len, header_delim)?;
-                            self.depth += 1;
+                            self.depth += 2;
                             for inner_arr in arr {
                                 if let Value::Array(inner) = inner_arr {
                                     write!(self.writer, "\n{}- ", self.indent())?;
                                     self.serialize_primitive_array(inner, None, active_delimiter)?;
                                 }
                             }
-                            self.depth -= 1;
+                            self.depth -= 2;
                         } else if let Some((is_tabular, fields)) = self.detect_tabular(arr) {
                             if is_tabular {
                                 let len = arr.len();
@@ -659,7 +671,7 @@ impl<W: Write> Serializer<W> {
                                     }
                                 }
                                 write!(self.writer, "}}:")?;
-                                self.depth += 1;
+                                self.depth += 2;
                                 for obj in arr {
                                     if let Value::Object(map) = obj {
                                         write!(self.writer, "\n{}", self.indent())?;
@@ -689,12 +701,12 @@ impl<W: Write> Serializer<W> {
                                         }
                                     }
                                 }
-                                self.depth -= 1;
+                                self.depth -= 2;
                             } else {
                                 let len = arr.len();
                                 let header_delim = active_delimiter.header_marker();
                                 write!(self.writer, "{}[{}{}]:", quoted_key, len, header_delim)?;
-                                self.depth += 1;
+                                self.depth += 2;
                                 for item in arr {
                                     write!(self.writer, "\n{}- ", self.indent())?;
                                     match item {
@@ -707,11 +719,7 @@ impl<W: Write> Serializer<W> {
                                             self.write_string(s, active_delimiter)?;
                                         }
                                         Value::Array(inner) => {
-                                            self.serialize_primitive_array(
-                                                inner,
-                                                None,
-                                                active_delimiter,
-                                            )?;
+                                            self.serialize_array(inner, None, active_delimiter)?;
                                         }
                                         Value::Object(obj) => {
                                             self.serialize_object_as_list_item(
@@ -721,13 +729,13 @@ impl<W: Write> Serializer<W> {
                                         }
                                     }
                                 }
-                                self.depth -= 1;
+                                self.depth -= 2;
                             }
                         } else {
                             let len = arr.len();
                             let header_delim = active_delimiter.header_marker();
                             write!(self.writer, "{}[{}{}]:", quoted_key, len, header_delim)?;
-                            self.depth += 1;
+                            self.depth += 2;
                             for item in arr {
                                 write!(self.writer, "\n{}- ", self.indent())?;
                                 match item {
@@ -740,11 +748,7 @@ impl<W: Write> Serializer<W> {
                                         self.write_string(s, active_delimiter)?;
                                     }
                                     Value::Array(inner) => {
-                                        self.serialize_primitive_array(
-                                            inner,
-                                            None,
-                                            active_delimiter,
-                                        )?;
+                                        self.serialize_array(inner, None, active_delimiter)?;
                                     }
                                     Value::Object(obj) => {
                                         self.serialize_object_as_list_item(obj, active_delimiter)?;
@@ -819,6 +823,14 @@ impl<W: Write> Serializer<W> {
         }
 
         Ok(())
+    }
+
+    fn quote_key(&self, key: &str) -> String {
+        if self.key_needs_quoting(key) {
+            format!("\"{}\"", self.escape_string(key))
+        } else {
+            key.to_string()
+        }
     }
 
     fn key_needs_quoting(&self, key: &str) -> bool {

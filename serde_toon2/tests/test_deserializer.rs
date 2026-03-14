@@ -153,3 +153,35 @@ v3: "null""#;
     assert_eq!(obj.get("v2").unwrap().as_str().unwrap(), "42");
     assert_eq!(obj.get("v3").unwrap().as_str().unwrap(), "null");
 }
+
+// Per spec section 6: non-integer bracket content means "not an array header",
+// so the line is parsed as a regular key-value pair.
+#[test]
+fn test_invalid_root_array_length_is_key_value() {
+    let result: Value = from_str("[x]: 1,2").unwrap();
+    let obj = result.as_object().unwrap();
+    assert_eq!(obj.get("[x]").unwrap().as_str().unwrap(), "1,2");
+}
+
+#[test]
+fn test_invalid_keyed_array_length_is_key_value() {
+    let result: Value = from_str("items[x]: 1,2").unwrap();
+    let obj = result.as_object().unwrap();
+    assert_eq!(obj.get("items[x]").unwrap().as_str().unwrap(), "1,2");
+}
+
+// Unclosed braces cause header parsing to fail gracefully, falling through
+// to key-value parsing with the colon inside the braces.
+#[test]
+fn test_unclosed_keyed_tabular_header_is_key_value() {
+    let result: Value = from_str("items[2]{id: 1,2").unwrap();
+    let obj = result.as_object().unwrap();
+    assert_eq!(obj.get("items[2]{id").unwrap().as_str().unwrap(), "1,2");
+}
+
+#[test]
+fn test_unclosed_root_tabular_header_is_key_value() {
+    let result: Value = from_str("[2]{id: 1,2").unwrap();
+    let obj = result.as_object().unwrap();
+    assert_eq!(obj.get("[2]{id").unwrap().as_str().unwrap(), "1,2");
+}

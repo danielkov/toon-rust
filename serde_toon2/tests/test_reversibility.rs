@@ -1,5 +1,16 @@
 use serde_toon2::{Value, from_str, to_string};
 
+fn assert_json_roundtrip(json_input: &str) {
+    let value: serde_json::Value = serde_json::from_str(json_input).unwrap();
+    let toon_value: Value = serde_json::from_value(value.clone()).unwrap();
+    let toon_str = to_string(&toon_value).unwrap();
+
+    let parsed_toon: Value = from_str(&toon_str).unwrap();
+    let json_output = serde_json::to_value(&parsed_toon).unwrap();
+
+    assert_eq!(value, json_output);
+}
+
 #[test]
 fn test_json_to_toon_to_json() {
     let json_input = r#"{
@@ -151,6 +162,97 @@ fn test_special_characters_reversibility() {
     let json_output = serde_json::to_value(&parsed_toon).unwrap();
 
     assert_eq!(value, json_output);
+}
+
+#[test]
+fn test_escaped_array_key_reversibility() {
+    assert_json_roundtrip(
+        r#"{
+  "a\"b": [1, 2],
+  "path\\key": ["x"]
+}"#,
+    );
+}
+
+#[test]
+fn test_escaped_nested_array_key_reversibility() {
+    assert_json_roundtrip(
+        r#"{
+  "outer": {
+    "a\"b": [1, 2],
+    "path\\key": ["x"]
+  }
+}"#,
+    );
+}
+
+#[test]
+fn test_list_item_sibling_tabular_array_reversibility() {
+    assert_json_roundtrip(
+        r#"{
+  "items": [
+    {
+      "name": "x",
+      "nested": [
+        {"id": 1},
+        {"id": 2}
+      ]
+    }
+  ]
+}"#,
+    );
+}
+
+#[test]
+fn test_list_item_sibling_object_array_reversibility() {
+    assert_json_roundtrip(
+        r#"{
+  "items": [
+    {
+      "name": "x",
+      "nested": [
+        {"id": 1},
+        {"name": "y"}
+      ]
+    }
+  ]
+}"#,
+    );
+}
+
+#[test]
+fn test_list_item_sibling_array_of_arrays_reversibility() {
+    assert_json_roundtrip(
+        r#"{
+  "items": [
+    {
+      "name": "x",
+      "nested": [
+        [1, 2],
+        []
+      ]
+    }
+  ]
+}"#,
+    );
+}
+
+#[test]
+fn test_list_item_sibling_mixed_array_reversibility() {
+    assert_json_roundtrip(
+        r#"{
+  "items": [
+    {
+      "name": "x",
+      "nested": [
+        1,
+        {"id": 1},
+        [2]
+      ]
+    }
+  ]
+}"#,
+    );
 }
 
 #[test]
