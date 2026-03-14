@@ -1339,7 +1339,7 @@ dependencies = [
 ]
 
 [[package]]
-name = "toon"
+name = "toon2"
 version = "0.4.0"
 dependencies = [
  "clap",
